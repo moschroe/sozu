@@ -226,6 +226,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "cookie-factory"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98a479f8099cc5ac64915a3dd76c87be27f929ba406ad705aacb13f19b791207"
+
+[[package]]
 name = "crc32fast"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -341,7 +347,7 @@ checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
  "humantime",
- "log",
+ "log 0.4.11",
  "regex",
  "termcolor",
 ]
@@ -384,6 +390,16 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
+name = "form_urlencoded"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ece68d15c92e84fa4f19d3780f1294e5ca82a78a6d515f1efaabcc144688be00"
+dependencies = [
+ "matches",
+ "percent-encoding 2.1.0",
+]
 
 [[package]]
 name = "fs_extra"
@@ -480,6 +496,15 @@ name = "hex"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+
+[[package]]
+name = "hpack"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c68f61350ad23817dd207b035b5258d91ac5eaef69e96f906628aaed8854dda"
+dependencies = [
+ "log 0.3.9",
+]
 
 [[package]]
 name = "humantime"
@@ -596,6 +621,15 @@ dependencies = [
 
 [[package]]
 name = "log"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
+dependencies = [
+ "log 0.4.11",
+]
+
+[[package]]
+name = "log"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fabed175da42fed1fa0746b0ea71f412aa9d35e76e95e59b192c64b9dc2bf8b"
@@ -652,7 +686,7 @@ dependencies = [
  "iovec",
  "kernel32-sys",
  "libc",
- "log",
+ "log 0.4.11",
  "miow",
  "net2",
  "slab 0.4.2",
@@ -666,7 +700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
 dependencies = [
  "lazycell",
- "log",
+ "log 0.4.11",
  "mio",
  "slab 0.4.2",
 ]
@@ -939,7 +973,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a44883e74aa97ad63db83c4bf8ca490f02b2fc02f92575e720c8551e843c945f"
 dependencies = [
  "env_logger",
- "log",
+ "log 0.4.11",
  "rand",
  "rand_core",
 ]
@@ -1081,7 +1115,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b25a18b1bf7387f0145e7f8324e700805aade3842dd3db2e74e4cdeb4677c09e"
 dependencies = [
  "base64 0.10.1",
- "log",
+ "log 0.4.11",
  "ring",
  "sct",
  "webpki",
@@ -1236,7 +1270,7 @@ dependencies = [
  "bytes",
  "env_logger",
  "futures",
- "log",
+ "log 0.4.11",
  "serde",
  "serde_json",
  "sozu-command-lib",
@@ -1251,7 +1285,7 @@ version = "0.11.52"
 dependencies = [
  "hex",
  "libc",
- "log",
+ "log 0.4.11",
  "memchr",
  "mio",
  "mio-uds",
@@ -1271,12 +1305,14 @@ dependencies = [
 name = "sozu-lib"
 version = "0.11.52"
 dependencies = [
+ "cookie-factory",
  "hashbrown",
  "hdrhistogram",
+ "hpack",
  "idna 0.2.0",
  "iovec",
  "libc",
- "log",
+ "log 0.4.11",
  "memchr",
  "mio",
  "mio-extras",
@@ -1294,7 +1330,7 @@ dependencies = [
  "sozu-command-lib",
  "time 0.1.44",
  "tiny_http",
- "url 2.1.1",
+ "url 2.2.0",
  "uuid",
  "webpki",
 ]
@@ -1542,7 +1578,7 @@ dependencies = [
  "ascii",
  "chrono",
  "chunked_transfer",
- "log",
+ "log 0.4.11",
  "url 1.7.2",
 ]
 
@@ -1596,7 +1632,7 @@ dependencies = [
  "bytes",
  "futures",
  "iovec",
- "log",
+ "log 0.4.11",
  "mio",
  "scoped-tls",
  "tokio",
@@ -1645,7 +1681,7 @@ checksum = "57fc868aae093479e3131e3d165c93b1c7474109d13c90ec0dda2a1bbfff0674"
 dependencies = [
  "bytes",
  "futures",
- "log",
+ "log 0.4.11",
 ]
 
 [[package]]
@@ -1657,7 +1693,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures",
  "lazy_static",
- "log",
+ "log 0.4.11",
  "mio",
  "num_cpus",
  "parking_lot",
@@ -1702,7 +1738,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures",
  "lazy_static",
- "log",
+ "log 0.4.11",
  "num_cpus",
  "slab 0.4.2",
  "tokio-executor",
@@ -1728,7 +1764,7 @@ checksum = "e2a0b10e610b39c38b031a2fcab08e4b82f16ece36504988dcbd81dbba650d82"
 dependencies = [
  "bytes",
  "futures",
- "log",
+ "log 0.4.11",
  "mio",
  "tokio-codec",
  "tokio-io",
@@ -1745,7 +1781,7 @@ dependencies = [
  "futures",
  "iovec",
  "libc",
- "log",
+ "log 0.4.11",
  "mio",
  "mio-uds",
  "tokio-codec",
@@ -1823,10 +1859,11 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829d4a8476c35c9bf0bbce5a3b23f4106f79728039b726d292bb93bc106787cb"
+checksum = "5909f2b0817350449ed73e8bcd81c8c3c8d9a7a5d8acba4b27db277f1868976e"
 dependencies = [
+ "form_urlencoded",
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
@@ -1901,7 +1938,7 @@ checksum = "f22b422e2a757c35a73774860af8e112bff612ce6cb604224e8e47641a9e4f68"
 dependencies = [
  "bumpalo",
  "lazy_static",
- "log",
+ "log 0.4.11",
  "proc-macro2",
  "quote",
  "syn",
