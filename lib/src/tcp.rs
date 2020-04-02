@@ -412,7 +412,7 @@ impl Session {
         backend.retry_policy.succeed();
 
         if was_unavailable {
-            incr!("up", self.app_id.as_ref().map(|s| s.as_str()), self.metrics.backend_id.as_ref().map(|s| s.as_str()));
+            incr!("up", self.cluster_id.as_ref().map(|s| s.as_str()), self.metrics.backend_id.as_ref().map(|s| s.as_str()));
         }
       });
     }
