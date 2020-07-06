@@ -1400,6 +1400,7 @@ impl<Front:SocketHandler> Http<Front> {
         SessionResult::Continue
       } else {
         //info!("frontend timeout triggered for token {:?}", token);
+        self.front_timeout.triggered();
         match self.timeout_status() {
           TimeoutStatus::Request => {
             self.set_answer(DefaultAnswerStatus::Answer408, None);
@@ -1416,6 +1417,7 @@ impl<Front:SocketHandler> Http<Front> {
       }
     } else if self.backend_token == Some(token) {
         //info!("backend timeout triggered for token {:?}", token);
+        self.back_timeout.triggered();
         match self.timeout_status() {
             TimeoutStatus::Request => {
                 error!("got backend timeout while waiting for a request, this should not happen");
