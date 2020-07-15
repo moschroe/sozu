@@ -1078,7 +1078,7 @@ pub fn remove_certificate(channel: Channel<CommandRequest,CommandResponse>, time
 
     if let Some(fingerprint) = fingerprint.and_then(|s| {
         match hex::decode(s) {
-            Ok(v) => Some(CertFingerprint(v)),
+            Ok(v) => Some(CertificateFingerprint(v)),
             Err(e) => {
                 eprintln!("Error decoding the certificate fingerprint (expected hexadecimal data): {:?}", e);
                 None
@@ -1110,7 +1110,7 @@ pub fn replace_certificate(channel: Channel<CommandRequest,CommandResponse>, tim
   if let Some(new_certificate) = load_full_certificate(new_certificate_path, new_certificate_chain_path, new_key_path) {
     if let Some(old_fingerprint) = old_fingerprint.and_then(|s| {
         match hex::decode(s) {
-            Ok(v) => Some(CertFingerprint(v)),
+            Ok(v) => Some(CertificateFingerprint(v)),
             Err(e) => {
                 eprintln!("Error decoding the certificate fingerprint (expected hexadecimal data): {:?}", e);
                 None
