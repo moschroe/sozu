@@ -253,6 +253,7 @@ impl Default for RulePosition {
 pub enum PathRule {
   Prefix(String),
   Regex(String),
+  Equals(String),
 }
 
 impl std::fmt::Display for PathRule {
@@ -260,6 +261,7 @@ impl std::fmt::Display for PathRule {
     match self {
       PathRule::Prefix(s) => write!(f, "prefix '{}'", s),
       PathRule::Regex(r) => write!(f, "regexp '{}'", r.as_str()),
+      PathRule::Equals(s) => write!(f, "equals '{}'", s),
     }
   }
 }
