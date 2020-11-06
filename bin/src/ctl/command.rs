@@ -988,7 +988,7 @@ pub fn remove_application(channel: Channel<CommandRequest,CommandResponse>, time
 }
 
 pub fn add_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
-  timeout: u64, route: Route, address: SocketAddr, hostname: &str, path: &str,
+  timeout: u64, route: Route, address: SocketAddr, hostname: &str, path: &str, method: Option<&str>,
   https: bool) {
   if https {
     order_command(channel, timeout, ProxyRequestData::AddHttpsFrontend(HttpFrontend {
@@ -996,6 +996,7 @@ pub fn add_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
       address,
       hostname: String::from(hostname),
       path: PathRule::Prefix(String::from(path)),
+      method: method.map(String::from),
       position: RulePosition::Tree,
     }));
   } else {
@@ -1004,6 +1005,7 @@ pub fn add_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
       address,
       hostname: String::from(hostname),
       path: PathRule::Prefix(String::from(path)),
+      method: method.map(String::from),
       position: RulePosition::Tree,
     }));
   }
@@ -1011,13 +1013,14 @@ pub fn add_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
 
 pub fn remove_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
   timeout: u64, route: Route, address: SocketAddr, hostname: &str, path: &str,
-  https: bool) {
+  method: Option<&str>, https: bool) {
   if https {
     order_command(channel, timeout, ProxyRequestData::RemoveHttpsFrontend(HttpFrontend {
       route,
       address,
       hostname: String::from(hostname),
       path: PathRule::Prefix(String::from(path)),
+      method: method.map(String::from),
       position: RulePosition::Tree,
     }));
   } else {
@@ -1026,6 +1029,7 @@ pub fn remove_http_frontend(channel: Channel<CommandRequest,CommandResponse>,
       address,
       hostname: String::from(hostname),
       path: PathRule::Prefix(String::from(path)),
+      method: method.map(String::from),
       position: RulePosition::Tree,
     }));
   }

@@ -238,6 +238,8 @@ pub enum HttpFrontendCmd {
     hostname: String,
     #[structopt(short = "p", long = "path", help="URL prefix of the frontend")]
     path_begin: Option<String>,
+    #[structopt(short = "m", long = "method", help="HTTP method")]
+    method: Option<String>,
   },
   #[structopt(name = "remove")]
   Remove {
@@ -249,6 +251,8 @@ pub enum HttpFrontendCmd {
     hostname: String,
     #[structopt(short = "p", long = "path", help="URL prefix of the frontend")]
     path_begin: Option<String>,
+    #[structopt(short = "m", long = "method", help="HTTP method")]
+    method: Option<String>,
   },
 }
 
