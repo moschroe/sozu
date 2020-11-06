@@ -31,7 +31,8 @@ use sozu_command::proxy::{Cluster,CertificateFingerprint,CertificateAndKey,
 use sozu_command::logging;
 use sozu_command::ready::Ready;
 
-use protocol::http::{parser::{RequestState,RRequestLine,hostname_and_port}, answers::HttpAnswers};
+use protocol::http::{parser::{RequestState, RRequestLine, hostname_and_port, Method},
+  answers::HttpAnswers};
 use pool::Pool;
 use {ClusterId,Backend,SessionResult,ConnectionError,Protocol,Readiness,SessionMetrics,
   ProxySession,ProxyConfiguration,AcceptError,BackendConnectAction,BackendConnectionStatus,
@@ -1261,7 +1262,7 @@ impl Listener {
   }
 
   // ToDo factor out with http.rs
-  pub fn frontend_from_request(&self, host: &str, uri: &str) -> Option<Route> {
+  pub fn frontend_from_request(&self, host: &str, uri: &str, method: &Method) -> Option<Route> {
     let host: &str = if let Ok((i, (hostname, _))) = hostname_and_port(host.as_bytes()) {
       if i != &b""[..] {
         error!("frontend_from_request: invalid remaining chars after hostname. Host: {}", host);
@@ -1277,7 +1278,7 @@ impl Listener {
       return None;
     };
 
-    self.fronts.lookup(host.as_bytes(), uri.as_bytes())
+    self.fronts.lookup(host.as_bytes(), uri.as_bytes(), method)
   }
 
   fn accept(&mut self) -> Result<TcpStream, AcceptError> {
@@ -1462,7 +1463,7 @@ impl Proxy {
     let rl:&RRequestLine = session.http().and_then(|h| h.request.as_ref()).and_then(|r| r.get_request_line())
       .ok_or(ConnectionError::NoRequestLineGiven)?;
     match self.listeners.get(&session.listen_token).as_ref()
-      .and_then(|l| l.frontend_from_request(&host, &rl.uri)) {
+      .and_then(|l| l.frontend_from_request(&host, &rl.uri, &rl.method)) {
       Some(Route::ClusterId(cluster_id)) => Ok(cluster_id),
       Some(Route::Deny) => {
         session.set_answer(DefaultAnswerStatus::Answer401, None);
@@ -1881,7 +1882,7 @@ mod tests {
   use std::str::FromStr;
   use std::rc::Rc;
   use std::sync::{Arc,Mutex};
-  use router::{trie::TrieNode,Router,PathRule};
+  use router::{trie::TrieNode,Router,PathRule,MethodRule};
   use sozu_command::proxy::Route;
   use openssl::ssl::{SslContext, SslMethod};
 
@@ -1912,10 +1913,10 @@ mod tests {
     let uri3 = "/yolo/swag".to_owned();
 
     let mut fronts = Router::new();
-    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri1), Route::ClusterId(cluster_id1.clone())));
-    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri2), Route::ClusterId(cluster_id2)));
-    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri3), Route::ClusterId(cluster_id3)));
-    assert!(fronts.add_tree_rule("other.domain".as_bytes(), PathRule::Prefix("test".to_string()), Route::ClusterId(cluster_id1)));
+    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri1), MethodRule::new(None), Route::ClusterId(cluster_id1.clone())));
+    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri2), MethodRule::new(None), Route::ClusterId(cluster_id2)));
+    assert!(fronts.add_tree_rule("lolcatho.st".as_bytes(), PathRule::Prefix(uri3), MethodRule::new(None), Route::ClusterId(cluster_id3)));
+    assert!(fronts.add_tree_rule("other.domain".as_bytes(), PathRule::Prefix("test".to_string()), MethodRule::new(None), Route::ClusterId(cluster_id1)));
 
     let contexts   = HashMap::new();
     let rc_ctx     = Arc::new(Mutex::new(contexts));
@@ -1942,19 +1943,19 @@ mod tests {
 
 
     println!("TEST {}", line!());
-    let frontend1 = listener.frontend_from_request("lolcatho.st", "/");
+    let frontend1 = listener.frontend_from_request("lolcatho.st", "/", &Method::Get);
     assert_eq!(frontend1.expect("should find a frontend"), Route::ClusterId("app_1".to_string()));
     println!("TEST {}", line!());
-    let frontend2 = listener.frontend_from_request("lolcatho.st", "/test");
+    let frontend2 = listener.frontend_from_request("lolcatho.st", "/test", &Method::Get);
     assert_eq!(frontend2.expect("should find a frontend"), Route::ClusterId("app_1".to_string()));
     println!("TEST {}", line!());
-    let frontend3 = listener.frontend_from_request("lolcatho.st", "/yolo/test");
+    let frontend3 = listener.frontend_from_request("lolcatho.st", "/yolo/test", &Method::Get);
     assert_eq!(frontend3.expect("should find a frontend"), Route::ClusterId("app_2".to_string()));
     println!("TEST {}", line!());
-    let frontend4 = listener.frontend_from_request("lolcatho.st", "/yolo/swag");
+    let frontend4 = listener.frontend_from_request("lolcatho.st", "/yolo/swag", &Method::Get);
     assert_eq!(frontend4.expect("should find a frontend"), Route::ClusterId("app_3".to_string()));
     println!("TEST {}", line!());
-    let frontend5 = listener.frontend_from_request("domain", "/");
+    let frontend5 = listener.frontend_from_request("domain", "/", &Method::Get);
     assert_eq!(frontend5, None);
    // assert!(false);
   }

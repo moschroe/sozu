@@ -40,6 +40,7 @@ fn main() {
     address:  "127.0.0.1:8080".parse().unwrap(),
     hostname: String::from("lolcatho.st"),
     path:     PathRule::Prefix(String::from("/")),
+    method:   None,
     position: RulePosition::Tree,
   };
 
@@ -114,6 +115,7 @@ fn main() {
     address:  "127.0.0.1:8443".parse().unwrap(),
     hostname: String::from("lolcatho.st"),
     path:     PathRule::Prefix(String::from("/")),
+    method:   None,
     position: RulePosition::Tree,
   };
 
@@ -158,6 +160,7 @@ fn main() {
     address:  "127.0.0.1:8443".parse().unwrap(),
     hostname: String::from("test.local"),
     path:     PathRule::Prefix(String::from("/")),
+    method:   None,
     position: RulePosition::Tree,
   };
 
