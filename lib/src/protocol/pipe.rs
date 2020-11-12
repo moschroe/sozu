@@ -216,11 +216,11 @@ impl<Front:SocketHandler> Pipe<Front> {
     let service_time  = metrics.service_time();
 
     let cluster_id = self.cluster_id.clone().unwrap_or_else(|| String::from("-"));
-    time!("request_time", &cluster_id, response_time.num_milliseconds());
+    time!("request_time", &cluster_id, response_time.whole_milliseconds());
 
     if let Some(backend_id) = metrics.backend_id.as_ref() {
       if let Some(backend_response_time) = metrics.backend_response_time() {
-        record_backend_metrics!(cluster_id, backend_id, backend_response_time.num_milliseconds(),
+        record_backend_metrics!(cluster_id, backend_id, backend_response_time.whole_milliseconds(),
           metrics.backend_connection_time(), metrics.backend_bin, metrics.backend_bout);
       }
     }
@@ -251,11 +251,11 @@ impl<Front:SocketHandler> Pipe<Front> {
     let service_time  = metrics.service_time();
 
     let cluster_id = self.cluster_id.clone().unwrap_or_else(|| String::from("-"));
-    time!("request_time", &cluster_id, response_time.num_milliseconds());
+    time!("request_time", &cluster_id, response_time.whole_milliseconds());
 
     if let Some(backend_id) = metrics.backend_id.as_ref() {
       if let Some(backend_response_time) = metrics.backend_response_time() {
-        record_backend_metrics!(cluster_id, backend_id, backend_response_time.num_milliseconds(),
+        record_backend_metrics!(cluster_id, backend_id, backend_response_time.whole_milliseconds(),
           metrics.backend_connection_time(), metrics.backend_bin, metrics.backend_bout);
       }
     }

@@ -5,7 +5,7 @@ use std::net::{SocketAddr,IpAddr};
 use mio::*;
 use mio::net::TcpStream;
 use uuid::{Uuid, adapter::Hyphenated};
-use time::{SteadyTime, Duration};
+use time::{Instant, Duration};
 use super::super::{SessionResult,Protocol,Readiness,SessionMetrics, LogDuration};
 use buffer_queue::BufferQueue;
 use socket::{SocketHandler, SocketResult, TransportProtocol};
@@ -91,11 +91,11 @@ pub struct Http<Front:SocketHandler> {
   pub added_req_header: Option<AddedRequestHeader>,
   pub added_res_header: String,
   pub keepalive_count: usize,
-  pub backend_stop:    Option<SteadyTime>,
+  pub backend_stop:    Option<Instant>,
   answers:             Rc<RefCell<answers::HttpAnswers>>,
   pub closing:         bool,
   pool:                Weak<RefCell<Pool>>,
-  pub frontend_last_event: SteadyTime,
+  pub frontend_last_event: Instant,
   pub front_timeout:   TimeoutContainer,
   pub back_timeout:    TimeoutContainer,
 }
@@ -134,7 +134,7 @@ impl<Front:SocketHandler> Http<Front> {
       keepalive_count: 0,
       backend_stop:    None,
       closing:         false,
-      frontend_last_event: SteadyTime::now(),
+      frontend_last_event: Instant::now(),
       front_timeout,
       back_timeout: TimeoutContainer { timeout: None, duration: backend_timeout_duration.to_std().unwrap() },
       answers,
@@ -285,7 +285,7 @@ impl<Front:SocketHandler> Http<Front> {
   pub fn is_valid_backend_socket(&mut self) -> bool {
     // if socket was not used in the last second, test it
     if self.backend_stop.as_ref().map(|t| {
-      let now = SteadyTime::now();
+      let now = Instant::now();
       let dur = now - *t;
 
       dur > Duration::seconds(1)
@@ -484,14 +484,14 @@ impl<Front:SocketHandler> Http<Front> {
     let wait_time  = metrics.wait_time;
 
     let cluster_id = OptionalString::new(self.cluster_id.as_ref().map(|s| s.as_str()));
-    time!("response_time", cluster_id.as_str(), response_time.num_milliseconds());
-    time!("service_time", cluster_id.as_str(), service_time.num_milliseconds());
-    time!("response_time", response_time.num_milliseconds());
-    time!("service_time", service_time.num_milliseconds());
+    time!("response_time", cluster_id.as_str(), response_time.whole_milliseconds());
+    time!("service_time", cluster_id.as_str(), service_time.whole_milliseconds());
+    time!("response_time", response_time.whole_milliseconds());
+    time!("service_time", service_time.whole_milliseconds());
 
     if let Some(backend_id) = metrics.backend_id.as_ref() {
       if let Some(backend_response_time) = metrics.backend_response_time() {
-        record_backend_metrics!(cluster_id, backend_id, backend_response_time.num_milliseconds(),
+        record_backend_metrics!(cluster_id, backend_id, backend_response_time.whole_milliseconds(),
           metrics.backend_connection_time(), metrics.backend_bin, metrics.backend_bout);
       }
     }
@@ -529,11 +529,11 @@ impl<Front:SocketHandler> Http<Front> {
     let service_time  = metrics.service_time();
 
     if let Some(ref cluster_id) = self.cluster_id {
-      time!("response_time", &cluster_id, response_time.num_milliseconds());
-      time!("service_time", &cluster_id, service_time.num_milliseconds());
+      time!("response_time", &cluster_id, response_time.whole_milliseconds());
+      time!("service_time", &cluster_id, service_time.whole_milliseconds());
     }
-    time!("response_time", response_time.num_milliseconds());
-    time!("service_time", service_time.num_milliseconds());
+    time!("response_time", response_time.whole_milliseconds());
+    time!("service_time", service_time.whole_milliseconds());
     incr!("http.errors");
 
     let proto = self.protocol_string();
@@ -561,11 +561,11 @@ impl<Front:SocketHandler> Http<Front> {
     let service_time  = metrics.service_time();
 
     if let Some(ref cluster_id) = self.cluster_id {
-      time!("response_time", &cluster_id, response_time.num_milliseconds());
-      time!("service_time", &cluster_id, service_time.num_milliseconds());
+      time!("response_time", &cluster_id, response_time.whole_milliseconds());
+      time!("service_time", &cluster_id, service_time.whole_milliseconds());
     }
-    time!("response_time", response_time.num_milliseconds());
-    time!("service_time", service_time.num_milliseconds());
+    time!("response_time", response_time.whole_milliseconds());
+    time!("service_time", service_time.whole_milliseconds());
     incr!("http.errors");
     /*
     let cluster_id = self.cluster_id.clone().unwrap_or(String::from("-"));
@@ -573,7 +573,7 @@ impl<Front:SocketHandler> Http<Front> {
 
     if let Some(backend_id) = metrics.backend_id.as_ref() {
       if let Some(backend_response_time) = metrics.backend_response_time() {
-        record_backend_metrics!(cluster_id, backend_id, backend_response_time.num_milliseconds(), metrics.backend_connection_time(), metrics.backend_bin, metrics.backend_bout);
+        record_backend_metrics!(cluster_id, backend_id, backend_response_time.whole_milliseconds(), metrics.backend_connection_time(), metrics.backend_bin, metrics.backend_bout);
       }
     }*/
 
@@ -590,7 +590,7 @@ impl<Front:SocketHandler> Http<Front> {
     if !self.front_timeout.reset() {
         //error!("could not reset front timeout");
     }
-    self.frontend_last_event = SteadyTime::now();
+    self.frontend_last_event = Instant::now();
 
     if let SessionStatus::DefaultAnswer(_,_,_) = self.status {
       self.front_readiness.interest.insert(Ready::writable());
@@ -812,7 +812,7 @@ impl<Front:SocketHandler> Http<Front> {
   }
 
   fn writable_default_answer(&mut self, metrics: &mut SessionMetrics) -> SessionResult {
-    self.frontend_last_event = SteadyTime::now();
+    self.frontend_last_event = Instant::now();
     let res = if let SessionStatus::DefaultAnswer(_, ref buf, mut index) = self.status {
       let len = buf.len();
 
@@ -856,7 +856,7 @@ impl<Front:SocketHandler> Http<Front> {
 
   // Forward content to session
   pub fn writable(&mut self, metrics: &mut SessionMetrics) -> SessionResult {
-    self.frontend_last_event = SteadyTime::now();
+    self.frontend_last_event = Instant::now();
 
     //handle default answers
     if let SessionStatus::DefaultAnswer(_,_,_) = self.status {
@@ -1036,7 +1036,7 @@ impl<Front:SocketHandler> Http<Front> {
 
   // Forward content to application
   pub fn back_writable(&mut self, metrics: &mut SessionMetrics) -> SessionResult {
-    self.frontend_last_event = SteadyTime::now();
+    self.frontend_last_event = Instant::now();
     if let SessionStatus::DefaultAnswer(_,_,_) = self.status {
       error!("{}\tsending default answer, should not write to back", self.log_context());
       self.back_readiness.interest.remove(Ready::writable());
@@ -1169,7 +1169,7 @@ impl<Front:SocketHandler> Http<Front> {
         error!("could not reset back timeout {:?}:\n{}", self.back_timeout, self.print_state(""));
     }
 
-    self.frontend_last_event = SteadyTime::now();
+    self.frontend_last_event = Instant::now();
 
     if let SessionStatus::DefaultAnswer(_,_,_) = self.status {
       error!("{}\tsending default answer, should not read from back socket", self.log_context());
@@ -1245,7 +1245,7 @@ impl<Front:SocketHandler> Http<Front> {
         self.front_readiness.interest.insert(Ready::writable());
         if ! self.back_buf.as_ref().unwrap().needs_input() {
           metrics.backend_stop();
-          self.backend_stop = Some(SteadyTime::now());
+          self.backend_stop = Some(Instant::now());
           self.back_readiness.interest.remove(Ready::readable());
         }
         (ProtocolResult::Continue, SessionResult::Continue)
@@ -1300,7 +1300,7 @@ impl<Front:SocketHandler> Http<Front> {
 
           if let Some(ResponseState::ResponseWithBodyChunks(_,_,Chunk::Ended)) = self.response {
             metrics.backend_stop();
-            self.backend_stop = Some(SteadyTime::now());
+            self.backend_stop = Some(Instant::now());
             self.back_readiness.interest.remove(Ready::readable());
           }
         }
@@ -1365,7 +1365,7 @@ impl<Front:SocketHandler> Http<Front> {
 
         if let Some(ResponseState::Response(_,_)) = self.response {
           metrics.backend_stop();
-          self.backend_stop = Some(SteadyTime::now());
+          self.backend_stop = Some(Instant::now());
           self.back_readiness.interest.remove(Ready::readable());
         }
 
@@ -1400,7 +1400,7 @@ impl<Front:SocketHandler> Http<Front> {
 
   pub fn timeout(&mut self, token: Token, front_timeout: &Duration, metrics: &mut SessionMetrics) -> SessionResult {
     if self.frontend_token == token {
-      let dur = SteadyTime::now() - self.frontend_last_event;
+      let dur = Instant::now() - self.frontend_last_event;
       if dur < *front_timeout {
         TIMER.with(|timer| {
             timer.borrow_mut().set_timeout((*front_timeout - dur).to_std().unwrap(), token);

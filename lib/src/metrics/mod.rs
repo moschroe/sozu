@@ -318,7 +318,7 @@ macro_rules! record_backend_metrics (
       m.receive_metric("bytes_out", Some(cluster_id), Some(backend_id), MetricData::Count($bout as i64));
       m.receive_metric("backend_response_time", Some(cluster_id), Some(backend_id), MetricData::Time($response_time as usize));
       if let Some(t) = $backend_connection_time {
-        m.receive_metric("backend_connection_time", Some(cluster_id), Some(backend_id), MetricData::Time(t.num_milliseconds() as usize));
+        m.receive_metric("backend_connection_time", Some(cluster_id), Some(backend_id), MetricData::Time(t.whole_milliseconds() as usize));
       }
     });
   }

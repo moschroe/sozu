@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::net::{SocketAddr,Shutdown};
 use uuid::Uuid;
-use time::{Duration,SteadyTime};
+use time::{Duration,Instant};
 use uuid::adapter::Hyphenated;
 
 use sozu_command::scm_socket::ScmSocket;
@@ -60,7 +60,7 @@ pub struct Session {
   protocol:           Option<State>,
   front_buf:          Option<Checkout>,
   back_buf:           Option<Checkout>,
-  last_event:         SteadyTime,
+  last_event:         Instant,
   connection_attempt: u8,
   frontend_address:   Option<SocketAddr>,
   front_timeout:      TimeoutContainer,
@@ -128,7 +128,7 @@ impl Session {
       protocol,
       front_buf:          frontend_buffer,
       back_buf:           backend_buffer,
-      last_event:         SteadyTime::now(),
+      last_event:         Instant::now(),
       connection_attempt: 0,
       frontend_address,
       front_timeout,
@@ -151,15 +151,15 @@ impl Session {
       Some(SocketAddr::V6(addr)) => format!("{}", addr),
     };
 
-    let response_time = self.metrics.response_time().num_milliseconds();
-    let service_time  = self.metrics.service_time().num_milliseconds();
+    let response_time = self.metrics.response_time().whole_milliseconds();
+    let service_time  = self.metrics.service_time().whole_milliseconds();
     let cluster_id = self.cluster_id.clone().unwrap_or_else(|| String::from("-"));
     time!("response_time", &cluster_id, response_time);
     time!("response_time", response_time);
 
     if let Some(backend_id) = self.metrics.backend_id.as_ref() {
       if let Some(backend_response_time) = self.metrics.backend_response_time() {
-        record_backend_metrics!(cluster_id, backend_id, backend_response_time.num_milliseconds(),
+        record_backend_metrics!(cluster_id, backend_id, backend_response_time.whole_milliseconds(),
           self.metrics.backend_response_time(), self.metrics.backend_bin, self.metrics.backend_bout);
       }
     }
@@ -543,7 +543,7 @@ impl ProxySession for Session {
 
   fn timeout(&mut self, token: Token, front_timeout: &Duration) -> SessionResult {
     if self.frontend_token == token {
-      let dur = SteadyTime::now() - self.last_event;
+      let dur = Instant::now() - self.last_event;
       if dur < *front_timeout {
         TIMER.with(|timer| {
           timer.borrow_mut().set_timeout((*front_timeout - dur).to_std().unwrap(), token);
@@ -589,7 +589,7 @@ impl ProxySession for Session {
 
   fn process_events(&mut self, token: Token, events: Ready) {
     trace!("token {:?} got event {}", token, super::ready_to_string(events));
-    self.last_event = SteadyTime::now();
+    self.last_event = Instant::now();
     self.metrics.wait_start();
 
     if self.frontend_token == token {
@@ -737,7 +737,7 @@ impl ProxySession for Session {
     SessionResult::CloseSession
   }
 
-  fn last_event(&self) -> SteadyTime {
+  fn last_event(&self) -> Instant {
     self.last_event
   }
 
