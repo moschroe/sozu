@@ -1,10 +1,11 @@
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::net::{Shutdown,SocketAddr};
+use std::convert::TryFrom;
 use mio::*;
 use mio::net::*;
 use std::io::{ErrorKind, Read};
-use time::{SteadyTime, Duration};
+use time::{Instant, Duration};
 use uuid::Uuid;
 use rustls::{ServerSession,Session as ClientSession,ProtocolVersion,SupportedCipherSuite,CipherSuite};
 use sozu_command::proxy::ProxyEvent;
