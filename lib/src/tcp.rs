@@ -23,7 +23,7 @@ use {ClusterId,Backend,SessionResult,ConnectionError,Protocol,Readiness,SessionM
   ProxySession,ProxyConfiguration,AcceptError,BackendConnectAction,BackendConnectionStatus,
   CloseResult};
 use backends::BackendMap;
-use server::{Server,ProxyChannel,ListenToken,ListenPortState,
+use server::{Server,ProxyChannel,ListenToken,
   ListenSession, CONN_RETRIES, push_event, TIMER};
 use pool::{Pool,Checkout};
 use socket::server_bind;
@@ -1087,13 +1087,6 @@ impl ProxyConfiguration<Session> for Proxy {
       }
     } else {
       Err(AcceptError::IoError)
-    }
-  }
-
-  fn listen_port_state(&self, port: &u16) -> ListenPortState {
-    match self.listeners.values().find(|listener| &listener.address.port() == port) {
-      Some(_) => ListenPortState::InUse,
-      None => ListenPortState::Available
     }
   }
 }
