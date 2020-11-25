@@ -1,4 +1,3 @@
-use sozu_command::buffer::fixed::Buffer;
 use pool_crate::Reset;
 use std::io::{self,Write};
 use std::cmp::{min,max};
@@ -325,11 +324,9 @@ impl BufferQueue {
     let it = self.output_queue.iter();
     //first, calculate how many bytes we need to jump
     let mut start         = 0usize;
-    let mut largest_size  = 0usize;
-    let mut delete_ended  = false;
     let length = self.buffer.available_data();
     //println!("NEXT OUTPUT DATA:\nqueue:\n{:?}\nbuffer:\n{}", self.output_queue, self.buffer.data().to_hex(16));
-    let mut complete_size = 0;
+    let mut _complete_size = 0;
     for el in it {
       match el {
         &OutputElement::Delete(sz) => start += sz,
@@ -342,7 +339,7 @@ impl BufferQueue {
           let i = std::io::IoSlice::new(&self.buffer.data()[start..end]);
           //println!("iovec size: {}", i.len());
           res.push(i);
-          complete_size += i.len();
+          //complete_size += i.len();
           start = end;
           if end == length {
             break;
@@ -355,9 +352,9 @@ impl BufferQueue {
           let i = std::io::IoSlice::new(&v[..]);
           //println!("got Insert with {} bytes", v.len());
           res.push(i);
-          complete_size += i.len();
+          //complete_size += i.len();
         },
-        &OutputElement::Splice(sz)  => { unimplemented!("splice not used in ioslice") },
+        &OutputElement::Splice(_sz)  => { unimplemented!("splice not used in ioslice") },
       }
     }
 

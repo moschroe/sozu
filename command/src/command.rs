@@ -100,11 +100,6 @@ pub struct WorkerInfo {
   pub run_state:  RunState,
 }
 
-#[derive(Deserialize)]
-struct SaveStateData {
-  path : String
-}
-
 #[derive(Debug,Clone,PartialEq,Eq,Hash,Serialize,Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Event {

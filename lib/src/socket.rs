@@ -29,7 +29,7 @@ pub enum TransportProtocol {
 pub trait SocketHandler {
   fn socket_read(&mut self,  buf: &mut[u8]) -> (usize, SocketResult);
   fn socket_write(&mut self, buf: &[u8])    -> (usize, SocketResult);
-  fn socket_write_vectored(&mut self,  buf: &[std::io::IoSlice]) -> (usize, SocketResult) {
+  fn socket_write_vectored(&mut self,  _buf: &[std::io::IoSlice]) -> (usize, SocketResult) {
     unimplemented!()
   }
   fn has_vectored_writes(&self) -> bool { false }
@@ -425,7 +425,7 @@ pub fn server_bind(addr: &SocketAddr) -> io::Result<TcpListener> {
 
   // listen
   // FIXME: make the backlog configurable?
-  let mut listener = sock.listen(1024)?;
+  let listener = sock.listen(1024)?;
 
   listener.set_nonblocking(true)?;
 

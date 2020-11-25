@@ -482,7 +482,7 @@ impl<Front:SocketHandler> Http<Front> {
 
     let response_time = metrics.response_time();
     let service_time  = metrics.service_time();
-    let wait_time  = metrics.wait_time;
+    let _wait_time  = metrics.wait_time;
 
     let cluster_id = OptionalString::new(self.cluster_id.as_ref().map(|s| s.as_str()));
     time!("response_time", cluster_id.as_str(), response_time.whole_milliseconds());

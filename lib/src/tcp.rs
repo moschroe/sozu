@@ -190,13 +190,6 @@ impl Session {
     }
   }
 
-  fn request_id(&self) -> Option<&Hyphenated> {
-    match self.protocol {
-      Some(State::Pipe(ref pipe)) => Some(&pipe.request_id),
-      _ => None,
-    }
-  }
-
   fn log_context(&self) -> String {
     format!("{} {} {}\t",
       self.request_id,
@@ -289,16 +282,6 @@ impl Session {
       Some(State::SendProxyProtocol(ref mut pp)) => pp.front_socket_mut(),
       Some(State::RelayProxyProtocol(ref mut pp)) => pp.front_socket_mut(),
       Some(State::ExpectProxyProtocol(ref mut pp)) => pp.front_socket_mut(),
-      _ => unreachable!(),
-    }
-  }
-
-  fn back_socket(&self)  -> Option<&TcpStream> {
-    match self.protocol {
-      Some(State::Pipe(ref pipe)) => pipe.back_socket(),
-      Some(State::SendProxyProtocol(ref pp)) => pp.back_socket(),
-      Some(State::RelayProxyProtocol(ref pp)) => pp.back_socket(),
-      Some(State::ExpectProxyProtocol(_)) => None,
       _ => unreachable!(),
     }
   }
@@ -1144,7 +1127,7 @@ pub fn start(config: TcpListenerConfig, max_buffers: usize, buffer_size:usize, c
   let token = {
     let entry = sessions.vacant_entry();
     let key = entry.key();
-    let e = entry.insert(Rc::new(RefCell::new(ListenSession { protocol: Protocol::HTTPListen })));
+    let _e = entry.insert(Rc::new(RefCell::new(ListenSession { protocol: Protocol::HTTPListen })));
     Token(key)
   };
 

@@ -434,16 +434,6 @@ impl Session {
     }
   }
 
-  fn front_socket(&self) -> Option<&TcpStream> {
-    match unwrap_msg!(self.protocol.as_ref()) {
-      &State::Expect(ref expect,_)     => Some(expect.front_socket()),
-      &State::Handshake(ref handshake) => handshake.socket(),
-      &State::Http(ref http)           => Some(http.front_socket()),
-      &State::Http2(ref http)          => Some(http.front_socket()),
-      &State::WebSocket(ref pipe)      => Some(pipe.front_socket()),
-    }
-  }
-
   fn front_socket_mut(&mut self) -> Option<&mut TcpStream> {
     match *unwrap_msg!(self.protocol.as_mut()) {
       State::Expect(ref mut expect,_)     => Some(expect.front_socket_mut()),
@@ -451,16 +441,6 @@ impl Session {
       State::Http(ref mut http)           => Some(http.front_socket_mut()),
       State::Http2(ref mut http)          => Some(http.front_socket_mut()),
       State::WebSocket(ref mut pipe)      => Some(pipe.front_socket_mut()),
-    }
-  }
-
-  fn back_socket(&self)  -> Option<&TcpStream> {
-    match unwrap_msg!(self.protocol.as_ref()) {
-      &State::Expect(_,_)         => None,
-      &State::Handshake(_)        => None,
-      &State::Http(ref http)      => http.back_socket(),
-      &State::Http2(ref http)     => http.back_socket(),
-      &State::WebSocket(ref pipe) => pipe.back_socket(),
     }
   }
 
@@ -1852,7 +1832,7 @@ pub fn start(config: HttpsListener, channel: ProxyChannel, max_buffers: usize, b
   let token = {
     let entry = sessions.vacant_entry();
     let key = entry.key();
-    let e = entry.insert(Rc::new(RefCell::new(ListenSession { protocol: Protocol::HTTPListen })));
+    let _e = entry.insert(Rc::new(RefCell::new(ListenSession { protocol: Protocol::HTTPListen })));
     Token(key)
   };
 

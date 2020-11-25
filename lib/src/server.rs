@@ -425,7 +425,7 @@ impl Server {
 
         let mut count = 0;
         let duration = self.zombie_check_interval;
-        for (index, session) in self.sessions.iter_mut().filter(|(_, c)| {
+        for (_index, session) in self.sessions.iter_mut().filter(|(_, c)| {
           now - c.borrow().last_event() > duration
         }) {
           let t = session.borrow().tokens();
@@ -1301,7 +1301,7 @@ impl Server {
       }
       let entry = self.sessions.vacant_entry();
       let back_token = Token(entry.key());
-      let entry = entry.insert(cl);
+      let _entry = entry.insert(cl);
 
       let (protocol, res) = match protocol {
         Protocol::TCP   => {

@@ -624,7 +624,6 @@ impl SessionMetrics {
     }
 
     self.service_start = Some(now);
-    let prev = self.wait_time;
     self.wait_time = self.wait_time + (now - self.wait_start);
   }
 
@@ -693,23 +692,21 @@ pub struct LogDuration(Duration);
 
 impl fmt::Display for LogDuration {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let secs = self.0.num_seconds();
+    let secs = self.0.whole_seconds();
     if secs >= 10 {
       return write!(f, "{}s", secs);
     }
 
-    let ms = self.0.num_milliseconds();
+    let ms = self.0.whole_milliseconds();
 
     if ms < 10 {
-      if let Some(us) = self.0.num_microseconds() {
+        let us = self.0.whole_microseconds();
         if us >= 10 {
-          return write!(f, "{}μs", us);
+            return write!(f, "{}μs", us);
         }
 
-        if let Some(ns) = self.0.num_nanoseconds() {
-          return write!(f, "{}ns", ns);
-        }
-      }
+        let ns = self.0.whole_nanoseconds();
+        return write!(f, "{}ns", ns);
     }
 
     write!(f, "{}ms", ms)

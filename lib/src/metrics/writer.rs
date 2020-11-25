@@ -71,7 +71,7 @@ impl MetricsWriter {
             self.panicked = true;
 
             let mut last_index = written;
-            let mut iovs = self.packet_indexes.iter().map(|index| {
+            let iovs = self.packet_indexes.iter().map(|index| {
               let iov = iovec {
                 iov_base: (self.buf.as_ptr() as usize + last_index) as *mut c_void,
                 iov_len: index - last_index
@@ -154,7 +154,7 @@ impl MetricsWriter {
                     self.packet_indexes.clear();
                     break;
                   } else {
-                    for i in 0..(sent as usize) {
+                    for _i in 0..(sent as usize) {
                       let _ = self.packet_indexes.remove(0);
                     }
                   }

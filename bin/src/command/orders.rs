@@ -70,7 +70,6 @@ impl CommandServer {
             CommandRequestData::SubscribeEvents => {
                 self.event_subscribers.insert(client_id);
             }
-            r => error!("unknown request: {:?}", r),
         }
     }
 
@@ -273,7 +272,7 @@ impl CommandServer {
                 "state loaded from {}, will start sending {} messages to workers",
                 path, diff_counter
             );
-            let id = message_id.to_string();
+            let _id = message_id.to_string();
             Task::spawn(async move {
                 let mut ok = 0usize;
                 let mut error = 0usize;
@@ -495,7 +494,7 @@ impl CommandServer {
 
         // same as launch_worker
         let next_id = self.next_id;
-        let mut worker = if let Ok(mut worker) = start_worker(
+        let mut worker = if let Ok(worker) = start_worker(
             next_id,
             &self.config,
             self.executable_path.clone(),
@@ -844,7 +843,7 @@ impl CommandServer {
                         ))
                         .await;
                 }
-                &Query::Applications(ref query_type) => {
+                &Query::Applications(_) => {
                     let master = master_query_answer.unwrap();
                     data.insert(String::from("master"), master);
 
@@ -981,7 +980,7 @@ impl CommandServer {
                 stopping_workers.insert(worker.id);
             }
 
-            let id = worker.id.clone();
+            let _id = worker.id.clone();
             let req_id = format!("{}-worker-{}", request_id, worker.id);
             worker.send(req_id.clone(), order.clone()).await;
             self.in_flight.insert(req_id, (tx.clone(), 1));
