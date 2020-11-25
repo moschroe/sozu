@@ -42,7 +42,7 @@ pub struct Session {
   pub metrics:        SessionMetrics,
   pub cluster_id:     Option<String>,
   sticky_name:        String,
-  last_event:         SteadyTime,
+  last_event:         Instant,
   pub listen_token:   Token,
   pub connection_attempt: u8,
   peer_address:       Option<SocketAddr>,
@@ -64,7 +64,7 @@ impl Session {
     };
 
     let request_id = Uuid::new_v4().to_hyphenated();
-    let duration = front_timeout_duration.to_std().unwrap();
+    let duration = std::time::Duration::try_from(front_timeout_duration).unwrap();
     let timeout = TIMER.with(|timer| {
         timer.borrow_mut().set_timeout(duration, token)
     });
@@ -91,7 +91,7 @@ impl Session {
       metrics,
       cluster_id:         None,
       sticky_name,
-      last_event:     SteadyTime::now(),
+      last_event:     Instant::now(),
       listen_token,
       connection_attempt: 0,
       peer_address,
@@ -608,7 +608,7 @@ impl ProxySession for Session {
 
   fn process_events(&mut self, token: Token, events: Ready) {
     trace!("token {:?} got event {}", token, super::super::ready_to_string(Ready::from(events)));
-    self.last_event = SteadyTime::now();
+    self.last_event = Instant::now();
     self.metrics.wait_start();
 
     if self.frontend_token == token {
@@ -763,7 +763,7 @@ impl ProxySession for Session {
     }
   }
 
-  fn last_event(&self) -> SteadyTime {
+  fn last_event(&self) -> Instant {
     self.last_event
   }
 

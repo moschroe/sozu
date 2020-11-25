@@ -2,6 +2,7 @@ use std::sync::{Arc,Mutex};
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::net::Shutdown;
+use std::convert::TryFrom;
 use std::os::unix::io::AsRawFd;
 use mio::*;
 use mio::net::*;
@@ -11,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use slab::Slab;
 use std::net::SocketAddr;
 use std::str::from_utf8_unchecked;
-use time::{SteadyTime, Duration};
+use time::{Instant, Duration};
 use openssl::ssl::{self, SslContext, SslContextBuilder, SslMethod, SslAlert,
                    Ssl, SslOptions, SslRef, SslStream, SniError, NameType, SslSessionCacheMode,
                    select_next_proto, AlpnError};
@@ -86,7 +87,7 @@ pub struct Session {
   sticky_name:        String,
   metrics:            SessionMetrics,
   pub cluster_id:     Option<String>,
-  last_event:         SteadyTime,
+  last_event:         Instant,
   pub listen_token:   Token,
   connection_attempt: u8,
   peer_address:       Option<SocketAddr>,
@@ -110,7 +111,7 @@ impl Session {
     };
 
     let request_id = Uuid::new_v4().to_hyphenated();
-    let duration = front_timeout_duration.to_std().unwrap();
+    let duration = std::time::Duration::try_from(front_timeout_duration).unwrap();
 
     let front_timeout = TimeoutContainer::new(duration, token);
 
@@ -136,7 +137,7 @@ impl Session {
       sticky_name,
       metrics,
       cluster_id:             None,
-      last_event:         SteadyTime::now(),
+      last_event:         Instant::now(),
       listen_token,
       connection_attempt: 0,
       peer_address,
@@ -685,7 +686,7 @@ impl ProxySession for Session {
 
   fn process_events(&mut self, token: Token, events: Ready) {
     trace!("token {:?} got event {}", token, super::ready_to_string(events));
-    self.last_event = SteadyTime::now();
+    self.last_event = Instant::now();
     self.metrics.wait_start();
 
     if self.frontend_token == token {
@@ -846,7 +847,7 @@ impl ProxySession for Session {
     }
   }
 
-  fn last_event(&self) -> SteadyTime {
+  fn last_event(&self) -> Instant {
     self.last_event
   }
 

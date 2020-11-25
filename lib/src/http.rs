@@ -5,10 +5,11 @@ use std::cell::RefCell;
 use std::os::unix::io::IntoRawFd;
 use std::net::{SocketAddr,Shutdown};
 use std::str::from_utf8_unchecked;
+use std::convert::TryFrom;
 use mio::*;
 use mio::net::*;
 use uuid::Uuid;
-use time::{SteadyTime,Duration};
+use time::{Instant,Duration};
 use slab::Slab;
 
 use sozu_command::scm_socket::{Listeners,ScmSocket};
@@ -58,7 +59,7 @@ pub struct Session {
   pub listen_token:   Token,
   connection_attempt: u8,
   answers:            Rc<RefCell<HttpAnswers>>,
-  last_event:         SteadyTime,
+  last_event:         Instant,
   front_timeout:      TimeoutContainer,
   backend_timeout_duration: Duration,
 }
@@ -69,7 +70,7 @@ impl Session {
     answers: Rc<RefCell<HttpAnswers>>, listen_token: Token, wait_time: Duration,
     front_timeout_duration: Duration, backend_timeout_duration: Duration) -> Option<Session> {
     let request_id = Uuid::new_v4().to_hyphenated();
-    let duration = front_timeout_duration.to_std().unwrap();
+    let duration = std::time::Duration::try_from(front_timeout_duration).unwrap();
     let mut front_timeout = TimeoutContainer {
         timeout: None,
         duration,
@@ -107,7 +108,7 @@ impl Session {
         front_timeout,
         listen_token,
         connection_attempt: 0,
-        last_event:         SteadyTime::now(),
+        last_event:         Instant::now(),
         answers,
         backend_timeout_duration,
       };
@@ -545,7 +546,7 @@ impl ProxySession for Session {
 
   fn process_events(&mut self, token: Token, events: Ready) {
     trace!("token {:?} got event {}", token, super::ready_to_string(events));
-    self.last_event = SteadyTime::now();
+    self.last_event = Instant::now();
     self.metrics.wait_start();
 
     if self.frontend_token == token {
@@ -702,7 +703,7 @@ impl ProxySession for Session {
     }
   }
 
-  fn last_event(&self) -> SteadyTime {
+  fn last_event(&self) -> Instant {
     self.last_event
   }
 

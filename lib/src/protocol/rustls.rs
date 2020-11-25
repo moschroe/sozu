@@ -1,4 +1,3 @@
-use mio::*;
 use mio::net::*;
 use uuid::adapter::Hyphenated;
 use std::io::ErrorKind;

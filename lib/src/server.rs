@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use mio::net::*;
 use mio::*;
 use std::collections::{HashSet,VecDeque};
-use std::os::unix::io::{AsRawFd,FromRawFd,IntoRawFd};
+use std::os::unix::io::{AsRawFd,FromRawFd};
 use std::time::Instant;
 use slab::Slab;
 use std::time::Duration;

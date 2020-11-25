@@ -3,6 +3,7 @@ use mio::*;
 use std::collections::HashMap;
 use std::os::unix::io::AsRawFd;
 use std::io::ErrorKind;
+use std::convert::TryFrom;
 use slab::Slab;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -77,11 +78,11 @@ impl Session {
     let mut backend_buffer = None;
 
     let request_id = Uuid::new_v4().to_hyphenated();
-    let duration = front_timeout_duration.to_std().unwrap();
+    let duration = std::time::Duration::try_from(front_timeout_duration).unwrap();
     let front_timeout = TimeoutContainer::new(duration, frontend_token);
     let back_timeout = TimeoutContainer {
         timeout: None,
-        duration: backend_timeout_duration.to_std().unwrap(),
+        duration: std::time::Duration::try_from(backend_timeout_duration).unwrap(),
     };
 
     let protocol = match proxy_protocol {
@@ -546,7 +547,7 @@ impl ProxySession for Session {
       let dur = Instant::now() - self.last_event;
       if dur < *front_timeout {
         TIMER.with(|timer| {
-          timer.borrow_mut().set_timeout((*front_timeout - dur).to_std().unwrap(), token);
+          timer.borrow_mut().set_timeout(std::time::Duration::try_from(*front_timeout - dur).unwrap(), token);
         });
         SessionResult::Continue
       } else {
@@ -951,7 +952,7 @@ impl ProxyConfiguration<Session> for Proxy {
         }
 
         let connect_timeout_duration = Duration::seconds(self.listeners[&session.accept_token].config.connect_timeout as i64);
-        let duration = connect_timeout_duration.to_std().unwrap();
+        let duration = std::time::Duration::try_from(connect_timeout_duration).unwrap();
         let timeout = TIMER.with(|timer| {
             timer.borrow_mut().set_timeout(duration, back_token)
         });

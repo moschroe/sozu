@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::net::{SocketAddr,IpAddr};
+use std::convert::TryFrom;
 use mio::*;
 use mio::net::TcpStream;
 use uuid::{Uuid, adapter::Hyphenated};
@@ -136,7 +137,7 @@ impl<Front:SocketHandler> Http<Front> {
       closing:         false,
       frontend_last_event: Instant::now(),
       front_timeout,
-      back_timeout: TimeoutContainer { timeout: None, duration: backend_timeout_duration.to_std().unwrap() },
+      back_timeout: TimeoutContainer { timeout: None, duration: std::time::Duration::try_from(backend_timeout_duration).unwrap() },
       answers,
       pool,
     };
@@ -330,7 +331,7 @@ impl<Front:SocketHandler> Http<Front> {
 
   pub fn set_back_timeout(&mut self, dur: Duration) {
       if let Some(token) = self.backend_token.as_ref() {
-          self.back_timeout.duration = dur.to_std().unwrap();
+          self.back_timeout.duration = std::time::Duration::try_from(dur).unwrap();
           self.back_timeout.set(*token);
       }
   }
@@ -1403,7 +1404,7 @@ impl<Front:SocketHandler> Http<Front> {
       let dur = Instant::now() - self.frontend_last_event;
       if dur < *front_timeout {
         TIMER.with(|timer| {
-            timer.borrow_mut().set_timeout((*front_timeout - dur).to_std().unwrap(), token);
+            timer.borrow_mut().set_timeout(std::time::Duration::try_from(*front_timeout - dur).unwrap(), token);
         });
         SessionResult::Continue
       } else {
