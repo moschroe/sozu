@@ -906,7 +906,7 @@ impl CommandServer {
                             backend.backend_id, backend.address, backend.cluster_id
                         );
                         error!("{}", msg);
-                        self.answer_error(client_id, request_id, msg, None);
+                        self.answer_error(client_id, request_id, msg, None).await;
                         return;
                     }
                     ProxyRequestData::RemoveHttpFrontend(HttpFrontend {
