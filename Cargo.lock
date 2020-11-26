@@ -1703,6 +1703,7 @@ dependencies = [
  "pem",
  "pool",
  "poule",
+ "rand",
  "regex",
  "serde",
  "serde_derive",
