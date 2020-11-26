@@ -455,9 +455,14 @@ pub struct HttpListener {
     pub expect_proxy:   bool,
     #[serde(default = "default_sticky_name")]
     pub sticky_name:    String,
+    /// client inactive time
     pub front_timeout:  u32,
+    /// backend server inactive time
     pub back_timeout:   u32,
+    /// time to connect to the backend
     pub connect_timeout: u32,
+    /// max time to send a complete request
+    pub request_timeout: u32,
 }
 
 impl Default for HttpListener {
@@ -472,6 +477,7 @@ impl Default for HttpListener {
       front_timeout:   60,
       back_timeout:    30,
       connect_timeout: 3,
+      request_timeout: 10,
     }
   }
 }
@@ -554,6 +560,8 @@ pub struct HttpsListener {
     pub front_timeout:  u32,
     pub back_timeout:   u32,
     pub connect_timeout: u32,
+    /// max time to send a complete request
+    pub request_timeout: u32,
 }
 
 impl Default for HttpsListener {
@@ -585,6 +593,7 @@ impl Default for HttpsListener {
       front_timeout:   60,
       back_timeout:    30,
       connect_timeout: 3,
+      request_timeout: 10,
     }
   }
 }

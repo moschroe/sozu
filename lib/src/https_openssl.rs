@@ -92,6 +92,7 @@ pub struct Session {
   peer_address:       Option<SocketAddr>,
   answers:            Rc<RefCell<HttpAnswers>>,
   front_timeout:      TimeoutContainer,
+  frontend_timeout_duration: Duration,
   backend_timeout_duration: Duration,
 }
 
@@ -99,8 +100,8 @@ impl Session {
   pub fn new(ssl:Ssl, sock: TcpStream, token: Token, pool: Weak<RefCell<Pool>>,
     public_address: SocketAddr, expect_proxy: bool, sticky_name: String,
     answers: Rc<RefCell<HttpAnswers>>, listen_token: Token,
-    wait_time: Duration, front_timeout_duration: Duration,
-    backend_timeout_duration: Duration) -> Session {
+    wait_time: Duration, frontend_timeout_duration: Duration,
+    backend_timeout_duration: Duration, request_timeout_duration: Duration) -> Session {
 
     let peer_address = if expect_proxy {
       // Will be defined later once the expect proxy header has been received and parsed
@@ -111,7 +112,7 @@ impl Session {
 
     let request_id = Uuid::new_v4().to_hyphenated();
 
-    let front_timeout = TimeoutContainer::new(front_timeout_duration, token);
+    let front_timeout = TimeoutContainer::new(request_timeout_duration, token);
 
     let protocol = if expect_proxy {
       trace!("starting in expect proxy state");
@@ -141,6 +142,7 @@ impl Session {
       peer_address,
       answers,
       front_timeout,
+      frontend_timeout_duration,
       backend_timeout_duration,
     };
     session.front_readiness().interest = Ready::readable() | Ready::hup() | Ready::error();
@@ -248,11 +250,11 @@ impl Session {
           return true;
         },
         AlpnProtocols::Http11 => {
-          let backend_timeout_duration = self.backend_timeout_duration;
           let mut http = Http::new(unwrap_msg!(handshake.stream), self.frontend_token.clone(),
             handshake.request_id, pool, self.public_address.clone(), self.peer_address,
             self.sticky_name.clone(), Protocol::HTTPS, self.answers.clone(),
-            self.front_timeout.take(), backend_timeout_duration);
+            self.front_timeout.take(), self.frontend_timeout_duration,
+            self.backend_timeout_duration);
 
           http.front_readiness = readiness;
           http.front_readiness.interest = Ready::readable() | Ready::hup() | Ready::error();
@@ -1493,6 +1495,7 @@ impl ProxyConfiguration<Session> for Proxy {
           listener.answers.clone(), Token(token.0), wait_time,
           Duration::seconds(listener.config.front_timeout as i64),
           Duration::seconds(listener.config.back_timeout as i64),
+          Duration::seconds(listener.config.request_timeout as i64),
           );
 
         Ok((Rc::new(RefCell::new(c)), false))
