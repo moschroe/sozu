@@ -78,7 +78,7 @@ pub fn start_new_master_process(executable_path: String, upgrade_data: UpgradeDa
 
   info!("launching new master");
   //FIXME: remove the expect, return a result?
-  match fork().expect("fork failed") {
+  match unsafe { fork().expect("fork failed") } {
     ForkResult::Parent{ child } => {
       info!("master launched: {}", child);
       command.set_nonblocking(true);

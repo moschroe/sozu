@@ -24,7 +24,7 @@ include = [
 
 [dependencies]
 rand = "^0.7"
-nom = "^5.0"
+nom = "^6.0"
 url = "^2.1"
 log = "^0.4"
 net2 = "^0.2"
@@ -35,14 +35,14 @@ slab = "^0.4.0"
 pool = "^0.1"
 openssl = {version="^0.10.26", optional = true}
 openssl-sys = {version="^0.9", optional = true}
-rustls = "^0.18"
+rustls = "^0.19"
 webpki = "^0.21"
 hdrhistogram = "^7.0"
 sozu-command-lib = { version = "^0.11", path = "../command" }
 idna = "^0.2"
 mio-extras = "^2.0"
 memchr = "2.3"
-hashbrown = "0.8"
+hashbrown = "0.9"
 regex = "1.1"
 cookie-factory = "^0.3"
 hpack = "^0.3"

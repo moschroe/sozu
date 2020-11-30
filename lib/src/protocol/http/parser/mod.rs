@@ -320,7 +320,7 @@ pub fn hostname_and_port(i: &[u8]) -> IResult<&[u8], (&[u8], Option<&[u8]>)> {
   let (i, port) = opt(preceded(bytes::complete::tag(":"), digit_complete))(i)?;
 
   if !i.is_empty() {
-    Err(Err::Error((i, ErrorKind::Eof)))
+    Err(Err::Error(nom::error::Error::new(i, ErrorKind::Eof)))
   } else {
     Ok((i, (host, port)))
   }
