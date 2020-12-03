@@ -1828,7 +1828,6 @@ dependencies = [
  "slab",
  "sled",
  "sozu-command-lib",
- "tempfile",
  "time 0.2.24",
  "tiny_http",
  "url",
