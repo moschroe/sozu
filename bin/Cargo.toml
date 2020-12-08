@@ -47,6 +47,7 @@ async-io = "0.1"
 async-dup = "1.2"
 futures-lite = "0.1"
 log = "^0.4"
+termion = "1.5"
 
 sozu-lib = { version = "^0.11", path = "../lib" }
 sozu-command-lib = { version = "^0.11", path = "../command" }
