@@ -178,7 +178,7 @@ impl LocalDrain {
   }
 
   pub fn query(&mut self, q: &QueryMetricsType) -> Result<QueryAnswerMetrics, String> {
-      info!("GOT QUERY: {:?}", q);
+      debug!("query: {:?}", q);
       match q {
           QueryMetricsType::List => {
               Ok(QueryAnswerMetrics::List(self.metrics.keys().cloned().collect()))
@@ -245,7 +245,6 @@ impl LocalDrain {
       }
 
 
-      info!("WILL QUERY: '{}\t{}'", key, timestamp);
       if let Some(v) = tree.get(&format!("{}\t{}", key, timestamp).as_bytes())? {
           match kind {
               MetricKind::Gauge => {
@@ -282,7 +281,7 @@ impl LocalDrain {
 
               let res = self.metrics.get(&key);
               if res.is_none() {
-                  error!("unknown metric key {}", key);
+                  //error!("unknown metric key {}", key);
                   continue
               }
               let (meta, kind) = res.unwrap();
@@ -325,7 +324,7 @@ impl LocalDrain {
 
               let res = self.metrics.get(&key);
               if res.is_none() {
-                  error!("unknown metric key {}", key);
+                  //error!("unknown metric key {}", key);
                   continue
               }
               let (meta, kind) = res.unwrap();
@@ -356,7 +355,7 @@ impl LocalDrain {
 
       if let Some((k, v)) = tree.get_lt(end.as_bytes())? {
           if k.starts_with(start.as_bytes()) {
-
+              /*
               if is_backend {
                   let mut it = k.split(|c: &u8| *c == b'\t');
                   let key = std::str::from_utf8(it.next().unwrap()).unwrap();
@@ -377,11 +376,9 @@ impl LocalDrain {
                   let value = usize::from_le_bytes((*v).try_into().unwrap());
                   info!("looking at key = {}, id = {}, ts = {} -> {}",
                         key, cluster_id, timestamp, value);
-              }
+              }*/
 
               return Ok(Some(v));
-          } else {
-              error!("no key found between '{}' and '{}'", start, end);
           }
       }
 
@@ -484,13 +481,13 @@ impl LocalDrain {
           return;
       }
 
-      info!("metric: {} {} {:?} {:?}", key, cluster_id, backend_id, metric);
+      trace!("metric: {} {} {:?} {:?}", key, cluster_id, backend_id, metric);
 
       if let MetricData::Time(t) = metric {
          if let Err(e) = self.store_time_metric(key, cluster_id, None, t) {
              error!("metrics database error: {:?}", e);
          }
-         if let Some(bid) = backend_id {
+         if backend_id.is_some() {
              if let Err(e) = self.store_time_metric(key, cluster_id, backend_id, t) {
                  error!("metrics database error: {:?}", e);
              }
@@ -508,7 +505,6 @@ impl LocalDrain {
   }
 
   fn store_metric(&mut self, key_prefix: &str, id: &str, backend_id: Option<&str>, metric: &MetricData) -> Result<(), sled::Error> {
-      info!("metric: {} {} {:?} {:?}", key_prefix, id, backend_id, metric);
 
       if !self.metrics.contains_key(key_prefix) {
           let kind = match metric {
@@ -536,8 +532,7 @@ impl LocalDrain {
           MetricData::Count(i) => {
               self.store_count(&key_prefix, *i, backend_id.is_some())?;
           },
-          MetricData::Time(i) => {
-              //self.store_time(&key_prefix, *i, backend_id.is_some())?;
+          MetricData::Time(_) => {
           },
       }
 
@@ -561,7 +556,7 @@ impl LocalDrain {
       let timestamp = now.unix_timestamp();
       let complete_key = format!("{}\t{}", key, timestamp);
 
-      info!("store gauge at {} -> {}", complete_key, i);
+      trace!("store gauge at {} -> {}", complete_key, i);
       if is_backend {
           self.backend_tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
       } else {
@@ -600,7 +595,7 @@ impl LocalDrain {
       let timestamp = now.unix_timestamp();
       let complete_key = format!("{}\t{}", key, timestamp);
 
-      info!("add gauge at {} -> {}", complete_key, i);
+      trace!("add gauge at {} -> {}", complete_key, i);
       let value = match self.tree(is_backend).get(complete_key.as_bytes())? {
           Some(v) => i64::from_le_bytes((*v).try_into().unwrap()),
           // start from the last known value, or zero
@@ -673,7 +668,7 @@ impl LocalDrain {
       } else {
           &mut self.cluster_tree
       };
-      info!("store count at {} -> {}", complete_key, i);
+      trace!("store count at {} -> {}", complete_key, i);
       match tree.get(complete_key.as_bytes())? {
           None => {
               tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
@@ -737,7 +732,7 @@ impl LocalDrain {
       // aggregate 60 measures in a point at the last minute
       for res in tree.range(one_minute_ago.as_bytes()..now_key.as_bytes()) {
           let (k, v) = res?;
-          info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+          debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
           tree.remove(k)?;
       }
 
@@ -745,7 +740,7 @@ impl LocalDrain {
       if now.minute() == 0 {
           for res in tree.range(one_hour_ago.as_bytes()..one_minute_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
 
@@ -753,7 +748,7 @@ impl LocalDrain {
           let one_day_ago = format!("{}\t{}", key, timestamp - 3600 * 24);
           for res in tree.range(key.as_bytes()..one_day_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
       }
@@ -776,7 +771,7 @@ impl LocalDrain {
       // aggregate 60 measures in a point at the last hour
       for res in tree.range(one_minute_ago.as_bytes()..now_key.as_bytes()) {
           let (k, v) = res?;
-          info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+          debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
           tree.remove(k)?;
       }
 
@@ -784,7 +779,7 @@ impl LocalDrain {
       if now.minute() == 0 {
           for res in tree.range(one_hour_ago.as_bytes()..one_minute_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
 
@@ -792,7 +787,7 @@ impl LocalDrain {
           let one_day_ago = format!("{}\t{}", key, timestamp - 3600 * 24);
           for res in tree.range(key.as_bytes()..one_day_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, i64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, i64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
       }
@@ -830,7 +825,7 @@ impl LocalDrain {
       // aggregate 60 measures in a point at the last hour
       for res in tree.range(one_minute_ago.as_bytes()..now_key.as_bytes()) {
           let (k, v) = res?;
-          info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+          debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
           tree.remove(k)?;
       }
 
@@ -838,7 +833,7 @@ impl LocalDrain {
       if now.minute() == 0 {
           for res in tree.range(one_hour_ago.as_bytes()..one_minute_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
 
@@ -846,7 +841,7 @@ impl LocalDrain {
           let one_day_ago = format!("{}\t{}", key, timestamp - 3600 * 24);
           for res in tree.range(key.as_bytes()..one_day_ago.as_bytes()) {
               let (k, v) = res?;
-              info!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, i64::from_le_bytes((*v).try_into().unwrap()));
+              debug!("removing {} -> {:?} (more than 24h)", unsafe { std::str::from_utf8_unchecked(&k) }, i64::from_le_bytes((*v).try_into().unwrap()));
               tree.remove(k)?;
           }
       }
@@ -864,7 +859,6 @@ impl LocalDrain {
       //if second != 0 {
           let previous_minute = now - time::Duration::seconds(second as i64);
           let timestamp = previous_minute.unix_timestamp();
-          info!("WILL REWRITE TIME METRIC AT {}", timestamp);
           let _res = self.store_time_metric_at(key, cluster_id, backend_id, timestamp, t)?;
       //} else {
       //}
@@ -930,7 +924,6 @@ impl LocalDrain {
               tree.insert(p99_99_key.as_bytes(), &t.to_le_bytes())?;
               tree.insert(p99_999_key.as_bytes(), &t.to_le_bytes())?;
               tree.insert(p100_key.as_bytes(), &t.to_le_bytes())?;
-              info!("TIME stored new {}: {}", p50_key, t);
           },
           Some(v) => {
               let old_count = i64::from_le_bytes((*v).try_into().unwrap());
@@ -963,8 +956,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.50f64);
                                   tree.insert(p50_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p50_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p90_key.as_bytes())? {
@@ -972,8 +963,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.90f64);
                                   tree.insert(p90_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p90_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p99_key.as_bytes())? {
@@ -981,8 +970,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.99f64);
                                   tree.insert(p99_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p99_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p99_9_key.as_bytes())? {
@@ -990,8 +977,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.999f64);
                                   tree.insert(p99_9_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p99_9_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p99_99_key.as_bytes())? {
@@ -999,8 +984,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.9999f64);
                                   tree.insert(p99_99_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p99_99_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p99_999_key.as_bytes())? {
@@ -1008,8 +991,6 @@ impl LocalDrain {
                                   let new_percentile = calculate_percentile(old_percentile, t,
                                                                             standard_dev, 0.99999f64);
                                   tree.insert(p99_999_key.as_bytes(), &new_percentile.to_le_bytes())?;
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p99_999_key, new_percentile,
-                                    old_percentile, t);
                               }
 
                               if let Some(old_v) = tree.get(p100_key.as_bytes())? {
@@ -1018,8 +999,6 @@ impl LocalDrain {
                                   if t > old_percentile {
                                       tree.insert(p100_key.as_bytes(), &t.to_le_bytes())?;
                                   }
-                                  info!("TIME rewrote {}: {} (old={}, t={})", p100_key, t,
-                                    old_percentile, t);
                               }
                           }
                       }
@@ -1032,28 +1011,28 @@ impl LocalDrain {
   }
 
   pub fn clear(&mut self, now: OffsetDateTime) -> Result<(), sled::Error> {
-      info!("will clear old data from the metrics database ({} points)",
+      debug!("will clear old data from the metrics database ({} points)",
         self.cluster_tree.len() + self.backend_tree.len());
 
-      info!("current keys:");
+      trace!("current keys:");
       if let (Some(first), Some(second)) = (self.cluster_tree.first()?, self.cluster_tree.last()?) {
         for res in self.cluster_tree.range(first.0..second.0) {
             let (k, v) = res?;
-            info!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+            trace!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
 
         }
       }
       if let (Some(first), Some(second)) = (self.backend_tree.first()?, self.backend_tree.last()?) {
         for res in self.backend_tree.range(first.0..second.0) {
             let (k, v) = res?;
-            info!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+            trace!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
 
         }
       }
 
       let metrics = self.metrics.clone();
       for (key, (meta, kind)) in metrics.iter() {
-          info!("will aggregate metrics for key '{}'", key);
+          trace!("will aggregate metrics for key '{}'", key);
 
           let is_backend = *meta == MetricMeta::ClusterBackend;
           match kind {
@@ -1069,23 +1048,23 @@ impl LocalDrain {
           }
       }
 
-      info!("remaining keys:");
+      trace!("remaining keys:");
       if let (Some(first), Some(second)) = (self.cluster_tree.first()?, self.cluster_tree.last()?) {
         for res in self.cluster_tree.range(first.0..second.0) {
             let (k, v) = res?;
-            info!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+            trace!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
 
         }
       }
       if let (Some(first), Some(second)) = (self.backend_tree.first()?, self.backend_tree.last()?) {
         for res in self.backend_tree.range(first.0..second.0) {
             let (k, v) = res?;
-            info!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
+            trace!("{} -> {:?}", unsafe { std::str::from_utf8_unchecked(&k) }, u64::from_le_bytes((*v).try_into().unwrap()));
 
         }
       }
 
-      info!("db size({} points): {:?} bytes",
+      debug!("db size({} points): {:?} bytes",
         self.cluster_tree.len() + self.backend_tree.len(),
         self.db.size_on_disk());
 
