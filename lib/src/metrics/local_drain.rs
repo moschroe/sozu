@@ -562,11 +562,8 @@ impl LocalDrain {
       let complete_key = format!("{}\t{}", key, timestamp);
 
       trace!("store gauge at {} -> {}", complete_key, i);
-      if is_backend {
-          self.backend_tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
-      } else {
-          self.cluster_tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
-      }
+      let mut batch = sled::Batch::default();
+      batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
 
       // aggregate at the last hour
       let second = now.second();
@@ -577,7 +574,7 @@ impl LocalDrain {
           let complete_key = format!("{}\t{}", key, timestamp);
 
           if !self.tree(is_backend).contains_key(complete_key.as_bytes())? {
-              self.tree(is_backend).insert(complete_key.as_bytes(), &i.to_le_bytes())?;
+              batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
           }
 
           let minute = previous_minute.minute();
@@ -587,10 +584,12 @@ impl LocalDrain {
 
               let complete_key = format!("{}\t{}", key, timestamp);
               if !self.tree(is_backend).contains_key(complete_key.as_bytes())? {
-                  self.tree(is_backend).insert(complete_key.as_bytes(), &i.to_le_bytes())?;
+                  batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
               }
           }
       }
+
+      self.tree(is_backend).apply_batch(batch)?;
 
       Ok(())
   }
@@ -601,6 +600,8 @@ impl LocalDrain {
       let complete_key = format!("{}\t{}", key, timestamp);
 
       trace!("add gauge at {} -> {}", complete_key, i);
+      let mut batch = sled::Batch::default();
+
       let value = match self.tree(is_backend).get(complete_key.as_bytes())? {
           Some(v) => i64::from_le_bytes((*v).try_into().unwrap()),
           // start from the last known value, or zero
@@ -613,7 +614,7 @@ impl LocalDrain {
       };
 
       let new_value = value + i;
-      self.tree(is_backend).insert(complete_key.as_bytes(), &new_value.to_le_bytes())?;
+      batch.insert(complete_key.as_bytes(), &new_value.to_le_bytes());
 
       // aggregate at the last hour
       let second = now.second();
@@ -635,7 +636,7 @@ impl LocalDrain {
           };
 
           let new_value = value + i;
-          self.tree(is_backend).insert(complete_key.as_bytes(), &new_value.to_le_bytes())?;
+          batch.insert(complete_key.as_bytes(), &new_value.to_le_bytes());
 
           let minute = previous_minute.minute();
           if minute != 0 {
@@ -656,9 +657,11 @@ impl LocalDrain {
               };
 
               let new_value = value + i;
-              self.tree(is_backend).insert(complete_key.as_bytes(), &new_value.to_le_bytes())?;
+              batch.insert(complete_key.as_bytes(), &new_value.to_le_bytes());
           }
       }
+
+      self.tree(is_backend).apply_batch(batch)?;
 
       Ok(())
   }
@@ -668,19 +671,16 @@ impl LocalDrain {
       let timestamp = now.unix_timestamp();
       let complete_key = format!("{}\t{}", key, timestamp);
 
-      let tree = if is_backend {
-          &mut self.backend_tree
-      } else {
-          &mut self.cluster_tree
-      };
       trace!("store count at {} -> {}", complete_key, i);
-      match tree.get(complete_key.as_bytes())? {
+      let mut batch = sled::Batch::default();
+
+      match self.tree(is_backend).get(complete_key.as_bytes())? {
           None => {
-              tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
+              batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
           },
           Some(v) => {
               let i2 = i64::from_le_bytes((*v).try_into().unwrap());
-              tree.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes())?;
+              batch.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes());
           }
       };
 
@@ -691,13 +691,13 @@ impl LocalDrain {
           let timestamp = previous_minute.unix_timestamp();
 
           let complete_key = format!("{}\t{}", key, timestamp);
-          match tree.get(complete_key.as_bytes())? {
+          match self.tree(is_backend).get(complete_key.as_bytes())? {
               None => {
-                  tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
+                  batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
               },
               Some(v) => {
                   let i2 = i64::from_le_bytes((*v).try_into().unwrap());
-                  tree.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes())?;
+                  batch.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes());
               }
           };
 
@@ -707,17 +707,19 @@ impl LocalDrain {
               let timestamp = previous_hour.unix_timestamp();
 
               let complete_key = format!("{}\t{}", key, timestamp);
-              match tree.get(complete_key.as_bytes())? {
+              match self.tree(is_backend).get(complete_key.as_bytes())? {
                   None => {
-                      tree.insert(complete_key.as_bytes(), &i.to_le_bytes())?;
+                      batch.insert(complete_key.as_bytes(), &i.to_le_bytes());
                   },
                   Some(v) => {
                       let i2 = i64::from_le_bytes((*v).try_into().unwrap());
-                      tree.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes())?;
+                      batch.insert(complete_key.as_bytes(), &(i+i2).to_le_bytes());
                   }
               };
           }
       }
+
+      self.tree(is_backend).apply_batch(batch)?;
 
       Ok(())
   }
