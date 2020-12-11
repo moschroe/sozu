@@ -4,7 +4,8 @@ use time::{Duration, OffsetDateTime};
 use std::convert::TryInto;
 use std::collections::BTreeMap;
 use hdrhistogram::Histogram;
-use sozu_command::proxy::{FilteredData,MetricsData,Percentiles,AppMetricsData,QueryMetricsType,QueryAnswerMetrics};
+use sozu_command::proxy::{FilteredData,MetricsData,Percentiles,AppMetricsData,
+  QueryMetricsType,QueryAnswerMetrics,MetricsConfiguration};
 
 use super::{MetricData,Subscriber};
 
@@ -112,6 +113,7 @@ pub struct LocalDrain {
   metrics:             BTreeMap<String, (MetricMeta, MetricKind)>,
   use_tagged_metrics:  bool,
   origin:              String,
+  enabled:             bool,
 }
 
 impl LocalDrain {
@@ -134,6 +136,7 @@ impl LocalDrain {
       data:        BTreeMap::new(),
       use_tagged_metrics: false,
       origin:      String::from("x"),
+      enabled:     true,
     }
   }
 
@@ -142,6 +145,18 @@ impl LocalDrain {
           &mut self.backend_tree
       } else {
           &mut self.cluster_tree
+      }
+  }
+
+  pub fn configure(&mut self, config: &MetricsConfiguration) {
+      match config {
+          MetricsConfiguration::Enabled(enabled) => {
+              self.enabled = *enabled;
+          },
+          MetricsConfiguration::Clear => {
+              self.backend_tree.clear();
+              self.cluster_tree.clear();
+          }
       }
   }
 
@@ -465,6 +480,10 @@ impl LocalDrain {
   }
 
   fn receive_cluster_metric(&mut self, key: &str, cluster_id: &str, backend_id: Option<&str>, metric: MetricData) {
+      if !self.enabled {
+          return;
+      }
+
       info!("metric: {} {} {:?} {:?}", key, cluster_id, backend_id, metric);
 
       if let MetricData::Time(t) = metric {

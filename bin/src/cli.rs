@@ -64,8 +64,8 @@ pub enum SubCmd {
   },
   #[structopt(name = "metrics", about = "gets statistics on the master and its workers")]
   Metrics {
-    #[structopt(short = "j", long = "json", help = "Print the command result in JSON format")]
-    json: bool
+    #[structopt(subcommand)]
+    cmd: MetricsCmd,
   },
   #[structopt(name = "logging", about = "change logging level")]
   Logging {
@@ -116,6 +116,16 @@ pub enum SubCmd {
   },
   #[structopt(name = "events", about = "receive sozu events")]
   Events
+}
+
+#[derive(StructOpt, PartialEq, Debug)]
+pub enum MetricsCmd {
+  #[structopt(name = "enable", about = "Enables local metrics collection")]
+  Enable,
+  #[structopt(name = "disable", about = "Disables local metrics collection")]
+  Disable,
+  #[structopt(name = "clear", about = "Deletes local metrics data")]
+  Clear,
 }
 
 #[derive(StructOpt, PartialEq, Debug)]
