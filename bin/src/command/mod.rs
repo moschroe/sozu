@@ -628,16 +628,16 @@ impl CommandServer {
         while let Some(msg) = self.command_rx.next().await {
             match msg {
                 CommandMessage::ClientNew { id, sender } => {
-                    info!("adding new client {}", id);
+                    debug!("adding new client {}", id);
                     self.clients.insert(id, sender);
                 }
                 CommandMessage::ClientClose { id } => {
-                    info!("removing client {}", id);
+                    debug!("removing client {}", id);
                     self.clients.remove(&id);
                     self.event_subscribers.remove(&id);
                 }
                 CommandMessage::ClientRequest { id, message } => {
-                    info!("client {} sent {:?}", id, message);
+                    debug!("client {} sent {:?}", id, message);
                     self.handle_client_message(id, message).await;
                 }
                 CommandMessage::WorkerClose { id } => {
@@ -650,7 +650,7 @@ impl CommandServer {
                     }
                 }
                 CommandMessage::WorkerResponse { id, message } => {
-                    info!("worker {} sent back {:?}", id, message);
+                    debug!("worker {} sent back {:?}", id, message);
                     if let Some(ProxyResponseData::Event(data)) = message.data {
                         let event: Event = data.into();
                         for client_id in self.event_subscribers.iter() {
@@ -818,7 +818,7 @@ async fn worker_loop(
     Task::spawn(async move {
         debug!("will start sending messages to worker {}", id);
         while let Some(msg) = rx.next().await {
-            info!("sending to woker {}: {:?}", id, msg);
+            debug!("sending to worker {}: {:?}", id, msg);
             let mut message: Vec<u8> = serde_json::to_string(&msg)
                 .map(|s| s.into_bytes())
                 .unwrap_or_else(|_| Vec::new());
