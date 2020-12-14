@@ -930,18 +930,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mio-extras"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
-dependencies = [
- "lazycell",
- "log 0.4.11",
- "mio 0.6.22",
- "slab",
-]
-
-[[package]]
 name = "mio-uds"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1604,7 +1592,6 @@ dependencies = [
  "async-dup",
  "async-io",
  "blocking",
- "chrono",
  "futures 0.3.8",
  "futures-lite",
  "hex",
@@ -1687,7 +1674,6 @@ dependencies = [
  "log 0.4.11",
  "memchr",
  "mio 0.7.6",
- "mio-extras",
  "net2",
  "nom",
  "openssl",
