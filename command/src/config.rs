@@ -13,7 +13,7 @@ use toml;
 
 use crate::proxy::{CertificateAndKey,ProxyRequestData,HttpFrontend,TcpFrontend,Backend,
   HttpListener,HttpsListener,TcpListener,AddCertificate,TlsProvider,LoadBalancingParams,
-  Cluster, TlsVersion,ActivateListener,ListenerType,RulePosition,PathRule,
+  Cluster, TlsVersion,ActivateListener,ListenerType, AddClientCa,RulePosition,PathRule,
   Route};
 
 use crate::command::{CommandRequestData,CommandRequest,PROTOCOL_VERSION};
@@ -271,6 +271,7 @@ pub struct FileAppFrontendConfig {
   pub certificate:       Option<String>,
   pub key:               Option<String>,
   pub certificate_chain: Option<String>,
+  pub client_ca_certs:   Option<Vec<String>>
   #[serde(default)]
   pub position:          RulePosition,
 }
@@ -331,6 +332,7 @@ impl FileAppFrontendConfig {
       certificate:       certificate_opt,
       key:               key_opt,
       certificate_chain: chain_opt,
+      client_ca_certs:   self.client_ca_certs.clone()
       position:          self.position,
       path,
       method:            self.method.clone(),
@@ -505,6 +507,7 @@ pub struct HttpFrontendConfig {
   pub certificate:       Option<String>,
   pub key:               Option<String>,
   pub certificate_chain: Option<Vec<String>>,
+  pub client_ca_certs:   Option<Vec<String>>
   #[serde(default)]
   pub position:          RulePosition,
 }
@@ -533,6 +536,16 @@ impl HttpFrontendConfig {
         method:      self.method.clone(),
         position:    self.position.clone(),
       }));
+
+      if let Some(vec_ca_certs) = &self.client_ca_certs {
+        for ca_cert in vec_ca_certs{
+          v.push(ProxyRequestData::AddClientCA(AddClientCa{
+            front: self.address,
+            certificate: ca_cert.clone()
+          }));
+        }
+      }
+
     } else {
       //create the front both for HTTP and HTTPS if possible
       v.push(ProxyRequestData::AddHttpFrontend(HttpFrontend {

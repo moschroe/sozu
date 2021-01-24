@@ -625,6 +625,7 @@ impl Server {
   }
 
   pub fn notify_proxys(&mut self, message: ProxyRequest) {
+    eprintln!("notify_proxys(message): {:#?}",message);
     self.config_state.handle_order(&message.order);
 
     match message {

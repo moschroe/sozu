@@ -3,6 +3,7 @@ use std::os::unix::io::AsRawFd;
 use std::net::SocketAddr;
 use mio::net::UdpSocket;
 use libc::{msghdr, iovec, c_void, c_uint};
+use nom::lib::std::mem::MaybeUninit;
 
 pub struct MetricSocket {
   pub addr:   SocketAddr,
@@ -87,19 +88,34 @@ impl MetricsWriter {
             }).collect::<Vec<_>>();
 
             let mut messages = iovs.iter().map(|iov| {
+                // initialize unsafely because we cannot set private
+                // fields __pad1/__pad2 when compiling for musl 64bit
+                let mut msghdr_zero: msghdr = unsafe { MaybeUninit::zeroed().assume_init() };
+                //assign every field! pads are exempt but are safely zeroed
+                msghdr_zero.msg_name = std::ptr::null_mut();
+                msghdr_zero.msg_namelen = 0;
+                msghdr_zero.msg_iov = iov.as_ptr() as *mut iovec;
+                msghdr_zero.msg_iovlen = 1;
+                msghdr_zero.msg_control = std::ptr::null_mut();
+                msghdr_zero.msg_controllen = 0;
+                msghdr_zero.msg_flags = 0;
 
-              libc::mmsghdr {
-                msg_hdr: msghdr {
-                  msg_name: std::ptr::null_mut(),
-                  msg_namelen: 0,
-                  msg_iov: iov.as_ptr() as *mut iovec,
-                  msg_iovlen: 1,
-                  msg_control: std::ptr::null_mut(),
-                  msg_controllen: 0,
-                  msg_flags: 0,
-                },
-                msg_len: 0,
-              }
+                libc::mmsghdr {
+                    msg_hdr: msghdr_zero,
+                    msg_len: 0,
+                }
+              // libc::mmsghdr {
+              //   msg_hdr: msghdr {
+              //     msg_name: std::ptr::null_mut(),
+              //     msg_namelen: 0,
+              //     msg_iov: iov.as_ptr() as *mut iovec,
+              //     msg_iovlen: 1,
+              //     msg_control: std::ptr::null_mut(),
+              //     msg_controllen: 0,
+              //     msg_flags: 0,
+              //   },
+              //   msg_len: 0,
+              // }
             }).collect::<Vec<_>>();
             //println!("created {} packets", messages.len());
 

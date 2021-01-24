@@ -150,6 +150,9 @@ pub enum ProxyRequestData {
     ReplaceCertificate(ReplaceCertificate),
     RemoveCertificate(RemoveCertificate),
 
+    AddClientCA(AddClientCa),
+    RemoveClientCA(RemoveClientCa),
+
     AddTcpFrontend(TcpFrontend),
     RemoveTcpFrontend(TcpFrontend),
 
@@ -327,6 +330,17 @@ pub struct AddCertificate {
     #[serde(default)]
     #[serde(skip_serializing_if="Vec::is_empty")]
     pub names: Vec<String>,
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Hash, Serialize, Deserialize)]
+pub struct AddClientCa {
+    pub front:       SocketAddr,
+    pub certificate: String,
+}
+#[derive(Debug,Clone,PartialEq,Eq,Hash, Serialize, Deserialize)]
+pub struct RemoveClientCa {
+    pub front:       SocketAddr,
+    pub fingerprint: CertFingerprint,
 }
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash, Serialize, Deserialize)]
@@ -724,6 +738,8 @@ impl ProxyRequestData {
       ProxyRequestData::AddHttpsFrontend(_)    => [Topic::HttpsProxyConfig].iter().cloned().collect(),
       ProxyRequestData::RemoveHttpsFrontend(_) => [Topic::HttpsProxyConfig].iter().cloned().collect(),
       ProxyRequestData::AddCertificate(_)      => [Topic::HttpsProxyConfig].iter().cloned().collect(),
+      ProxyRequestData::AddClientCA(_)         => [Topic::HttpsProxyConfig].iter().cloned().collect(),
+      ProxyRequestData::RemoveClientCA(_)      => [Topic::HttpsProxyConfig].iter().cloned().collect(),
       ProxyRequestData::ReplaceCertificate(_)  => [Topic::HttpsProxyConfig].iter().cloned().collect(),
       ProxyRequestData::RemoveCertificate(_)   => [Topic::HttpsProxyConfig].iter().cloned().collect(),
       ProxyRequestData::AddTcpFrontend(_)      => [Topic::TcpProxyConfig].iter().cloned().collect(),

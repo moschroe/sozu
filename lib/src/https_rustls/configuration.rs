@@ -62,6 +62,8 @@ pub struct Listener {
 impl Listener {
   pub fn new(config: HttpsListener, token: Token) -> Listener {
 
+    // panic!("trace creation of Listener...");
+    eprintln!("Listener::new(config): {:#?}",config);
     let mut server_config = ServerConfig::new(NoClientAuth::new());
     server_config.versions = config.versions.iter().map(|version| {
       match version {
@@ -578,6 +580,19 @@ impl ProxyConfiguration<Session> for Proxy {
           panic!()
         }
       },
+      ProxyRequestData::AddClientCA(add_cca) => {
+        if let Some(listener) = self.listeners.values_mut().find(|l| l.address == add_cca.front) {
+          // listener.remove_certificate(remove_certificate);
+          // ProxyResponse{ id: message.id, status: ProxyResponseStatus::Ok, data: None }
+
+          unimplemented!();
+        } else {
+          panic!()
+        }
+      },
+      ProxyRequestData::RemoveClientCA(remove_cca) => {
+        unimplemented!("{:?}", remove_cca);
+      },
       ProxyRequestData::ReplaceCertificate(replace_certificate) => {
         //FIXME: should return an error if certificate still has fronts referencing it
         if let Some(listener) = self.listeners.values_mut().find(|l| l.address == replace_certificate.address) {
@@ -666,6 +681,8 @@ impl ProxyConfiguration<Session> for Proxy {
 }
 
 use server::HttpsProvider;
+use std::any::Any;
+
 pub fn start(config: HttpsListener, channel: ProxyChannel, max_buffers: usize, buffer_size: usize) {
   use server::{self,ProxySessionCast};
 

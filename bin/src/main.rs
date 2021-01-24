@@ -64,6 +64,7 @@ fn main() {
         .map_err(|err| StartupError::PIDFileNotWritable(err))
     })
     .map(|config| {
+      eprintln!("config: {:#?}",config);
       util::setup_logging(&config);
       info!("Starting up");
       util::setup_metrics(&config);

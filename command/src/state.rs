@@ -9,7 +9,7 @@ use crate::proxy::{Cluster,CertificateFingerprint,CertificateAndKey,ProxyRequest
   HttpFrontend,TcpFrontend,Backend,QueryAnswerApplication,
   AddCertificate, RemoveCertificate, RemoveBackend,
   HttpListener,HttpsListener,TcpListener,ListenerType,
-  ActivateListener,RemoveListener,PathRule,DeactivateListener,
+  ActivateListener,RemoveListener,PathRule,DeactivateListener, AddClientCa, RemoveClientCa,
   Route};
 
 pub type ClusterId = String;
@@ -44,6 +44,7 @@ pub struct ConfigState {
   pub tcp_fronts:      HashMap<ClusterId, Vec<TcpFrontend>>,
   // certificate and names
   pub certificates:    HashMap<SocketAddr, HashMap<CertificateFingerprint, (CertificateAndKey, Vec<String>)>>,
+  pub client_cas:      HashMap<SocketAddr, HashMap<CertificateFingerprint, String>>,
   //ip, port
   pub http_addresses:  Vec<SocketAddr>,
   pub https_addresses: Vec<SocketAddr>,
@@ -62,6 +63,7 @@ impl ConfigState {
       https_fronts:    BTreeMap::new(),
       tcp_fronts:      HashMap::new(),
       certificates:    HashMap::new(),
+      client_cas:      HashMap::new(),
       http_addresses:  Vec::new(),
       https_addresses: Vec::new(),
     }
@@ -169,6 +171,34 @@ impl ConfigState {
           false
         }
       },
+      ProxyRequestData::AddClientCA(ref cca) => {
+        use std::collections::hash_map::Entry;
+        let fingerprint = match calculate_fingerprint(cca.certificate.as_bytes()) {
+          Some(fp) => CertFingerprint(fp),
+          None => {
+            error!("cannot obtain the client CA's fingerprint");
+            return false;
+          }
+        };
+        match self.client_cas.entry(cca.front) {
+          Entry::Vacant(ev) => {
+            let mut map=HashMap::with_capacity(1);
+            map.insert(fingerprint, cca.certificate.clone());
+            ev.insert(map);
+            true
+          }
+          Entry::Occupied(mut eo) => {
+            let map_certs = eo.get_mut();
+            if !map_certs.contains_key(&fingerprint)
+            {
+              map_certs.insert(fingerprint, cca.certificate.clone());
+              true
+            } else {
+              false
+            }
+          }
+        }
+      }
       &ProxyRequestData::RemoveCertificate(ref remove) => {
         self.certificates.get_mut(&remove.address).and_then(|certs| certs.remove(&remove.fingerprint)).is_some()
       },
@@ -305,6 +335,15 @@ impl ConfigState {
           address: **front,
           certificate: certificate_and_key.clone(),
           names: names.clone(),
+        }));
+      }
+    }
+
+    for (front, ccas) in &self.client_cas {
+      for (_fp, cca) in ccas {
+        v.push(ProxyRequestData::AddClientCA(AddClientCa {
+          front: *front,
+          certificate: cca.clone(),
         }));
       }
     }
@@ -458,6 +497,20 @@ impl ConfigState {
 
     let removed_certificates = my_certificates.difference(&their_certificates);
     let added_certificates   = their_certificates.difference(&my_certificates);
+
+    let my_client_cas: HashSet<(SocketAddr, &CertFingerprint, &String)> = {
+      HashSet::from_iter(self.client_cas.iter().flat_map(|(addr, ccas)| {
+        ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
+      }))
+    };
+    let their_client_cas: HashSet<(SocketAddr, &CertFingerprint, &String)> = {
+      HashSet::from_iter(other.client_cas.iter().flat_map(|(addr, ccas)| {
+        ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
+      }))
+    };
+
+    let removed_client_cas = my_client_cas.difference(&their_client_cas);
+    let added_client_cas = their_client_cas.difference(&my_client_cas);
 
     let mut v = vec!();
 
@@ -649,6 +702,13 @@ impl ConfigState {
       }));
     }
 
+    for (front, _fp, cert) in added_client_cas {
+      v.push(ProxyRequestData::AddClientCA(AddClientCa {
+        front: *front,
+        certificate: (*cert).clone(),
+      }));
+    }
+
     for &(_, front) in removed_http_fronts {
      v.push(ProxyRequestData::RemoveHttpFrontend(front.clone()));
     }
@@ -690,6 +750,13 @@ impl ConfigState {
         address,
         fingerprint: fingerprint.clone(),
         names: Vec::new(),
+      }));
+    }
+
+    for (front, fp, _cert) in removed_client_cas {
+      v.push(ProxyRequestData::RemoveClientCA(RemoveClientCa {
+        front: *front,
+        fingerprint: (*fp).clone(),
       }));
     }
 

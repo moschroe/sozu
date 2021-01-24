@@ -1408,6 +1408,7 @@ impl<Front:SocketHandler> Http<Front> {
         };
 
         if unwrap_msg!(self.response.as_ref()).is_back_error() {
+          trace!("back error: {:?}", self.response.as_ref());
           self.log_request_error(metrics, "back socket parse error, closing connection");
           self.set_answer(DefaultAnswerStatus::Answer502, None);
           return (ProtocolResult::Continue, self.writable(metrics));

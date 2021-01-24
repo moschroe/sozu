@@ -1,11 +1,13 @@
-use std::sync::{Arc,Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::collections::HashMap;
 use std::io::BufReader;
-use rustls::{ResolvesServerCert, ClientHello};
+use rustls::{ClientHello};
+use webpki;
+use rustls::{ResolvesServerCert, SignatureScheme, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient};
 use rustls::sign::{CertifiedKey, RSASigningKey};
 use rustls::internal::pemfile;
 
-use sozu_command::proxy::{CertificateAndKey, CertificateFingerprint, AddCertificate, RemoveCertificate};
+use sozu_command::proxy::{CertificateAndKey, CertificateFingerprint, AddCertificate, RemoveCertificate, AddClientCa, RemoveClientCa};
 use sozu_command::certificate::calculate_fingerprint_from_der;
 
 use router::trie::TrieNode;
@@ -138,6 +140,73 @@ impl ResolvesServerCert for CertificateResolverWrapper {
     None
   }
 }
+
+pub struct DynamicClientCertificateVerifier {
+  roots: HashMap<CertFingerprint, rustls::Certificate>,
+  inner: Arc<(dyn ClientCertVerifier + 'static)>,
+}
+
+impl DynamicClientCertificateVerifier {
+  pub fn new() -> Self {
+    let roots = RootCertStore::empty();
+    DynamicClientCertificateVerifier {
+      roots: HashMap::new(),
+      inner: AllowAnyAuthenticatedClient::new(roots),
+    }
+  }
+
+  pub fn add_ca_cert(&mut self, add: AddClientCa) -> Option<CertFingerprint> {
+    // self.roots.
+    let mut rdr_cert = BufReader::new(add.certificate.as_bytes());
+    let mut certs = match pemfile::certs(&mut rdr_cert) {
+      Ok(cert) => cert,
+      Err(err) => {
+        error!("unable to parse client ca cert: {:?}", err);
+        return None;
+      }
+    };
+    let cert;
+    if let Some(first_cert) = certs.pop() {
+      cert = first_cert;
+    } else {
+      error!("unable to parse exactly one cert from provided client CA data, got {}", certs.len());
+      return None;
+    };
+    if certs.len() > 0 {
+      error!("unable to parse exactly one cert from provided client CA data, got {}", certs.len() + 1);
+      return None;
+    }
+    std::mem::drop(certs);
+    let mut new_roots = RootCertStore::empty();
+    if let Err(err) = new_roots.add(&cert) {
+      error!("unable to add new client CA to RootCertStore: {}", err);
+      return None;
+    };
+    for cert in self.roots.values() {
+      if let Err(err) = new_roots.add(cert) {
+        error!("unable to add existing client CA to RootCertStore: {}", err);
+        return None;
+      };
+    }
+    let fp = CertFingerprint(calculate_fingerprint_from_der(&cert.0));
+    self.roots.insert(fp.clone(), cert);
+    // make new verifier
+    self.inner = AllowAnyAuthenticatedClient::new(new_roots);
+    Some(fp)
+  }
+}
+
+impl ClientCertVerifier for DynamicClientCertificateVerifier {
+  fn client_auth_root_subjects(&self) -> DistinguishedNames {
+    self.inner.client_auth_root_subjects()
+  }
+
+  fn verify_client_cert(&self, presented_certs: &[Certificate]) -> Result<ClientCertVerified, TLSError> {
+    self.inner.verify_client_cert(presented_certs)
+  }
+}
+
+pub struct ClientCertificateVerifierWrapper(pub RwLock<CertificateResolver>);
 
 pub fn generate_certified_key(certificate_and_key: CertificateAndKey) -> Option<CertifiedKey> {
   let mut chain = Vec::new();
