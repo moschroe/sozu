@@ -141,13 +141,46 @@ impl ResolvesServerCert for CertificateResolverWrapper {
   }
 }
 
+pub struct DynamicClientCertificateVerifierWrapper(RwLock<DynamicClientCertificateVerifier>);
+
+impl ClientCertVerifier for DynamicClientCertificateVerifierWrapper {
+  fn client_auth_root_subjects(&self) -> DistinguishedNames {
+    let access_read = self.0.read().expect("lock poisoned, unrecoverable program state");
+    access_read.inner.client_auth_root_subjects()
+  }
+
+  fn verify_client_cert(&self, presented_certs: &[Certificate]) -> Result<ClientCertVerified, TLSError> {
+    let access_read = self.0.read().map_err(|err_rwlock| {
+      error!("unable to acquire RwLock on inner DynamicClientCertificateVerifier in verify_client_cert(), returning Err");
+      TLSError::General("internal error in client cert verifier".into())
+    })?;
+    access_read.inner.verify_client_cert(presented_certs)
+  }
+}
+
+impl DynamicClientCertificateVerifierWrapper {
+  pub fn in_arc() -> Arc<Self> {
+    Arc::new(DynamicClientCertificateVerifierWrapper(RwLock::new(DynamicClientCertificateVerifier::new())))
+  }
+
+  pub fn add_client_ca(&self, add: AddClientCa) -> Result<CertFingerprint, String> {
+    let mut access_write = self.0.write().expect("lock poisoned, unrecoverable program state");
+    access_write.add_client_ca(add)
+  }
+
+  pub fn remove_client_ca(&self, remove: RemoveClientCa) -> Result<(), String> {
+    let mut access_write = self.0.write().expect("lock poisoned, unrecoverable program state");
+    access_write.remove_client_ca(remove)
+  }
+}
+
 pub struct DynamicClientCertificateVerifier {
   roots: HashMap<CertFingerprint, rustls::Certificate>,
   inner: Arc<(dyn ClientCertVerifier + 'static)>,
 }
 
 impl DynamicClientCertificateVerifier {
-  pub fn new() -> Self {
+  fn new() -> Self {
     let roots = RootCertStore::empty();
     DynamicClientCertificateVerifier {
       roots: HashMap::new(),
@@ -155,44 +188,53 @@ impl DynamicClientCertificateVerifier {
     }
   }
 
-  pub fn add_ca_cert(&mut self, add: AddClientCa) -> Option<CertFingerprint> {
-    // self.roots.
+  fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertFingerprint, String> {
+    trace!("adding client ca");
     let mut rdr_cert = BufReader::new(add.certificate.as_bytes());
     let mut certs = match pemfile::certs(&mut rdr_cert) {
       Ok(cert) => cert,
       Err(err) => {
-        error!("unable to parse client ca cert: {:?}", err);
-        return None;
+        return Err(format!("unable to parse client ca cert: {:?}", err));
       }
     };
     let cert;
     if let Some(first_cert) = certs.pop() {
       cert = first_cert;
     } else {
-      error!("unable to parse exactly one cert from provided client CA data, got {}", certs.len());
-      return None;
+      return Err(format!("unable to parse exactly one cert from provided client CA data, got {}", certs.len()));
     };
     if certs.len() > 0 {
-      error!("unable to parse exactly one cert from provided client CA data, got {}", certs.len() + 1);
-      return None;
+      return Err(format!("unable to parse exactly one cert from provided client CA data, got {}", certs.len() + 1));
     }
     std::mem::drop(certs);
     let mut new_roots = RootCertStore::empty();
     if let Err(err) = new_roots.add(&cert) {
-      error!("unable to add new client CA to RootCertStore: {}", err);
-      return None;
+      return Err(format!("unable to add new client CA to RootCertStore: {}", err));
     };
-    for cert in self.roots.values() {
-      if let Err(err) = new_roots.add(cert) {
-        error!("unable to add existing client CA to RootCertStore: {}", err);
-        return None;
-      };
-    }
+    self.add_all_roots(&mut new_roots)?;
     let fp = CertFingerprint(calculate_fingerprint_from_der(&cert.0));
     self.roots.insert(fp.clone(), cert);
     // make new verifier
     self.inner = AllowAnyAuthenticatedClient::new(new_roots);
-    Some(fp)
+    Ok(fp)
+  }
+
+  fn remove_client_ca(&mut self, remove: RemoveClientCa) -> Result<(), String> {
+    trace!("removing client ca");
+    self.roots.remove(&remove.fingerprint).ok_or_else(|| format!("no client ca cert with given fingerprint found to remove"))?;
+    let mut new_roots = RootCertStore::empty();
+    self.add_all_roots(&mut new_roots)?;
+    self.inner = AllowAnyAuthenticatedClient::new(new_roots);
+    Ok(())
+  }
+
+  fn add_all_roots(&mut self, new_roots: &mut RootCertStore) -> Result<(), String> {
+    for cert in self.roots.values() {
+      if let Err(err) = new_roots.add(cert) {
+        return Err(format!("unable to add existing client CA to RootCertStore: {}", err));
+      };
+    }
+    Ok(())
   }
 }
 
@@ -205,8 +247,6 @@ impl ClientCertVerifier for DynamicClientCertificateVerifier {
     self.inner.verify_client_cert(presented_certs)
   }
 }
-
-pub struct ClientCertificateVerifierWrapper(pub RwLock<CertificateResolver>);
 
 pub fn generate_certified_key(certificate_and_key: CertificateAndKey) -> Option<CertifiedKey> {
   let mut chain = Vec::new();

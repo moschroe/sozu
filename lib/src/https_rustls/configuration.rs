@@ -17,7 +17,7 @@ use sozu_command::scm_socket::ScmSocket;
 use sozu_command::proxy::{Cluster,
   ProxyRequestData,HttpFrontend,HttpsListener,ProxyRequest,ProxyResponse,
   ProxyResponseStatus,AddCertificate,RemoveCertificate,ReplaceCertificate,
-  TlsVersion,ProxyResponseData,Query, QueryCertificateType,QueryAnswer,
+  TlsVersion,ProxyResponseData,Query, QueryCertificateType,QueryAnswer, AddClientCa, RemoveClientCa,
   QueryAnswerCertificate,Route};
 use sozu_command::logging;
 use sozu_command::ready::Ready;
@@ -55,6 +55,7 @@ pub struct Listener {
   config:     HttpsListener,
   ssl_config: Arc<ServerConfig>,
   resolver:   Arc<CertificateResolverWrapper>,
+  client_verifier: Arc<DynamicClientCertificateVerifierWrapper>,
   pub token:  Token,
   active:     bool,
 }
@@ -64,7 +65,9 @@ impl Listener {
 
     // panic!("trace creation of Listener...");
     eprintln!("Listener::new(config): {:#?}",config);
-    let mut server_config = ServerConfig::new(NoClientAuth::new());
+    let client_verifier=DynamicClientCertificateVerifierWrapper::in_arc();
+    // let mut server_config = ServerConfig::new(NoClientAuth::new());
+    let mut server_config = ServerConfig::new(client_verifier.clone());
     server_config.versions = config.versions.iter().map(|version| {
       match version {
         TlsVersion::SSLv2   => ProtocolVersion::SSLv2,
@@ -108,6 +111,7 @@ impl Listener {
       listener: None,
       config,
       resolver,
+      client_verifier,
       token,
       active: false,
     }
@@ -175,6 +179,14 @@ impl Listener {
     //FIXME: handle results
     (*self.resolver).remove_certificate(remove);
     (*self.resolver).add_certificate(add);
+  }
+
+  pub fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertFingerprint, String> {
+    self.client_verifier.add_client_ca(add)
+  }
+
+  pub fn remote_client_ca(&mut self, remove: RemoveClientCa) -> Result<(), String> {
+    self.client_verifier.remove_client_ca(remove)
   }
 
   fn accept(&mut self) -> Result<TcpStream, AcceptError> {
@@ -582,16 +594,23 @@ impl ProxyConfiguration<Session> for Proxy {
       },
       ProxyRequestData::AddClientCA(add_cca) => {
         if let Some(listener) = self.listeners.values_mut().find(|l| l.address == add_cca.front) {
-          // listener.remove_certificate(remove_certificate);
-          // ProxyResponse{ id: message.id, status: ProxyResponseStatus::Ok, data: None }
-
-          unimplemented!();
+          match listener.client_verifier.add_client_ca(add_cca) {
+            Ok(_) => ProxyResponse { id: message.id, status: ProxyResponseStatus::Ok, data: None },
+            Err(err) => ProxyResponse { id: message.id, status: ProxyResponseStatus::Error(err), data: None }
+          }
         } else {
-          panic!()
+          panic!("no matching listener for AddClientCA found")
         }
       },
       ProxyRequestData::RemoveClientCA(remove_cca) => {
-        unimplemented!("{:?}", remove_cca);
+        if let Some(listener) = self.listeners.values_mut().find(|l| l.address == remove_cca.front) {
+          match listener.client_verifier.remove_client_ca(remove_cca) {
+            Ok(()) => ProxyResponse { id: message.id, status: ProxyResponseStatus::Ok, data: None },
+            Err(err) => ProxyResponse { id: message.id, status: ProxyResponseStatus::Error(err), data: None }
+          }
+        } else {
+          panic!("no matching listener for RemoveClientCA found")
+        }
       },
       ProxyRequestData::ReplaceCertificate(replace_certificate) => {
         //FIXME: should return an error if certificate still has fronts referencing it
@@ -682,6 +701,7 @@ impl ProxyConfiguration<Session> for Proxy {
 
 use server::HttpsProvider;
 use std::any::Any;
+use https_rustls::resolver::DynamicClientCertificateVerifierWrapper;
 
 pub fn start(config: HttpsListener, channel: ProxyChannel, max_buffers: usize, buffer_size: usize) {
   use server::{self,ProxySessionCast};

@@ -576,6 +576,7 @@ pub struct HttpsListener {
     pub rustls_cipher_list: Vec<String>,
     #[serde(default)]
     pub tls_provider:       TlsProvider,
+    pub verify_tlsclients:  bool,
     #[serde(default)]
     pub expect_proxy:       bool,
     #[serde(default = "default_sticky_name")]
@@ -611,6 +612,7 @@ impl Default for HttpsListener {
       rustls_cipher_list:  vec!(),
       versions:            vec!(TlsVersion::TLSv1_2),
       tls_provider:        TlsProvider::Rustls,
+      verify_tlsclients:   false,
       expect_proxy:        false,
       sticky_name:     String::from("SOZUBALANCEID"),
       front_timeout:   60,
