@@ -2,6 +2,7 @@ use super::*;
 use nom::{Err,error::ErrorKind,HexDisplay};
 use buffer_queue::{OutputElement,buf_with_capacity};
 use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /*
 #[test]
@@ -100,7 +101,7 @@ fn parse_state_host_in_url_test() {
     println!("buffer input: {:?}", buf.input_queue);
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer input: {:?}", buf.input_queue);
@@ -108,7 +109,7 @@ fn parse_state_host_in_url_test() {
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(49), OutputElement::Slice(25),
       OutputElement::Slice(13), OutputElement::Slice(21),
-      OutputElement::Insert(vec!()), OutputElement::Slice(202)));
+      OutputElement::Slice(202)));
     assert_eq!(buf.start_parsing_position, 310);
     assert_eq!(
       result,
@@ -139,7 +140,7 @@ fn parse_state_host_in_url_conflict_test() {
     println!("buffer input: {:?}", buf.input_queue);
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer input: {:?}", buf.input_queue);
@@ -174,7 +175,7 @@ fn parse_state_content_length_test() {
     println!("buffer input: {:?}", buf.input_queue);
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer input: {:?}", buf.input_queue);
@@ -182,7 +183,7 @@ fn parse_state_content_length_test() {
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(26), OutputElement::Slice(22), OutputElement::Slice(25),
       OutputElement::Slice(13), OutputElement::Slice(21),
-      OutputElement::Insert(vec!()), OutputElement::Slice(202)));
+      OutputElement::Slice(202)));
     assert_eq!(buf.start_parsing_position, 309);
     assert_eq!(
       result,
@@ -226,7 +227,7 @@ fn parse_state_content_length_partial() {
     println!("unparsed data after consume(26):\n{}", buf.unparsed_data().to_hex(16));
     println!("buffer output: {:?}", buf.output_queue);
 
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("unparsed data after parsing:\n{}", buf.unparsed_data().to_hex(16));
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
@@ -234,7 +235,7 @@ fn parse_state_content_length_partial() {
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(26), OutputElement::Slice(22),
       OutputElement::Slice(25), OutputElement::Slice(13),
-      OutputElement::Slice(21), OutputElement::Insert(vec!()),
+      OutputElement::Slice(21),
       OutputElement::Slice(202)));
     assert_eq!(buf.start_parsing_position, 309);
     assert_eq!(
@@ -265,7 +266,7 @@ fn parse_state_chunked_test() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     assert_eq!(buf.start_parsing_position, 116);
     assert_eq!(
@@ -297,7 +298,7 @@ fn parse_state_duplicate_content_length_test() {
     let (_pool, mut buf) = buf_with_capacity(2048);
     buf.write(&input[..]).unwrap();
 
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     assert_eq!(buf.start_parsing_position, 128);
     assert_eq!(
@@ -329,7 +330,7 @@ fn parse_state_content_length_and_chunked_test() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     assert_eq!(buf.start_parsing_position, 136);
     assert_eq!(
@@ -359,13 +360,13 @@ fn parse_request_without_length() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer output: {:?}", buf.output_queue);
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(16), OutputElement::Slice(22), OutputElement::Delete(19),
-      OutputElement::Insert(vec!()), OutputElement::Slice(2)));
+      OutputElement::Slice(2)));
     assert_eq!(buf.start_parsing_position, 59);
     assert_eq!(
       result,
@@ -392,7 +393,7 @@ fn parse_request_http_1_0_connection_close() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     assert_eq!(buf.start_parsing_position, 40);
     assert_eq!(
@@ -422,13 +423,13 @@ fn parse_request_http_1_0_connection_keep_alive() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer output: {:?}", buf.output_queue);
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(16), OutputElement::Slice(22), OutputElement::Delete(24),
-      OutputElement::Insert(vec!()), OutputElement::Slice(2)));
+      OutputElement::Slice(2)));
     assert_eq!(buf.start_parsing_position, 64);
     assert_eq!(
       result,
@@ -456,12 +457,12 @@ fn parse_request_http_1_1_connection_keep_alive() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("end buf:\n{}", buf.buffer.data().to_hex(16));
     println!("result: {:?}", result);
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(16), OutputElement::Slice(22),
-      OutputElement::Insert(vec!()), OutputElement::Slice(2)));
+      OutputElement::Slice(2)));
     assert_eq!(buf.start_parsing_position, 40);
     assert_eq!(
       result,
@@ -490,12 +491,12 @@ fn parse_request_http_1_1_connection_close() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("end buf:\n{}", buf.buffer.data().to_hex(16));
     println!("result: {:?}", result);
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(16), OutputElement::Delete(19), OutputElement::Slice(22),
-      OutputElement::Insert(vec!()), OutputElement::Slice(2)));
+      OutputElement::Slice(2)));
     assert_eq!(buf.start_parsing_position, 59);
     assert_eq!(
       result,
@@ -525,11 +526,24 @@ fn parse_request_add_header_test() {
     let (_pool, mut buf) = buf_with_capacity(2048);
     buf.write(&input[..]).unwrap();
 
-    let new_header = b"Sozu-Id: 123456789\r\n";
-    let result = parse_request_until_stop(initial, None, &mut buf, "Sozu-Id: 123456789\r\n", "SOZUBALANCEID");
+    let added = Some(AddedRequestHeader {
+        request_id: uuid::Uuid::nil().to_hyphenated(),
+        public_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+        peer_address: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 2)), 1234)),
+        protocol: crate::Protocol::HTTP,
+        closing: false,
+    });
+
+    let result = parse_request_until_stop(initial, None, &mut buf, added.as_ref(), "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer output: {:?}", buf.output_queue);
+
+    let new_header = b"X-Forwarded-Proto: http\r\n\
+    X-Forwarded-Port: 8080\r\n\
+    X-Forwarded-For: 192.168.0.2\r\n\
+    Forwarded: proto=http;for=192.168.0.2:1234;by=127.0.0.1\r\n\
+    Sozu-Id: 00000000-0000-0000-0000-000000000000\r\n";
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(26), OutputElement::Slice(22), OutputElement::Slice(25),
       OutputElement::Slice(13), OutputElement::Slice(21), OutputElement::Insert(Vec::from(&new_header[..])),
@@ -556,43 +570,69 @@ fn parse_request_delete_forwarded_headers() {
     let input =
         b"GET /index.html HTTP/1.1\r\n\
           Host: localhost:8888\r\n\
-          Forwarded: proto:https;for=27.0.0.1:1234;by:proxy\r\n\
+          Forwarded: proto:https;for=10.0.0.2:1234;by:1.2.3.4\r\n\
           X-forwarded-Proto: https\r\n\
-          X-Forwarded-For: 127.0.0.1\r\n\
+          X-Forwarded-For: 10.0.0.2\r\n\
           X-Forwarded-Port: 1234\r\n\
           \r\n";
     let initial = RequestState::Initial;
     let (_pool, mut buf) = buf_with_capacity(2048);
     buf.write(&input[..]).unwrap();
 
-    let new_header = b"Sozu-Id: 123456789\r\n";
-    let result = parse_request_until_stop(initial, None, &mut buf, "Sozu-Id: 123456789\r\n", "SOZUBALANCEID");
+    let added = Some(AddedRequestHeader {
+        request_id: uuid::Uuid::nil().to_hyphenated(),
+        public_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+        peer_address: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 2)), 1234)),
+        protocol: crate::Protocol::HTTP,
+        closing: false,
+    });
+
+    let result = parse_request_until_stop(initial, None, &mut buf, added.as_ref(), "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer output: {:?}", buf.output_queue);
+
+    let new_header = b"X-Forwarded-For: 10.0.0.2, 192.168.0.2\r\n\
+    Forwarded: proto:https;for=10.0.0.2:1234;by:1.2.3.4, proto=http;for=192.168.0.2:1234;by=127.0.0.1\r\n\
+    Sozu-Id: 00000000-0000-0000-0000-000000000000\r\n";
+
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(26), OutputElement::Slice(22),
       // Forwarded
-      OutputElement::Delete(51),
+      OutputElement::Delete(53),
       // X-Forwarded-Proto
-      OutputElement::Delete(26),
+      OutputElement::Slice(26),
       // X-Forwarded-For
-      OutputElement::Delete(28),
+      OutputElement::Delete(27),
       // X-Forwarded-Port
-      OutputElement::Delete(24),
+      OutputElement::Slice(24),
       OutputElement::Insert(Vec::from(&new_header[..])),
     OutputElement::Slice(2)));
     println!("buf:\n{}", buf.buffer.data().to_hex(16));
-    assert_eq!(buf.start_parsing_position, 179);
+    assert_eq!(buf.start_parsing_position, 180);
     assert_eq!(
       result,
       (
         RequestState::Request(
           RRequestLine { method: Method::Get, uri: String::from("/index.html"), version: Version::V11 },
-          Connection::new(),
+          Connection {
+            keep_alive:  None,
+            has_upgrade: false,
+            upgrade:     None,
+            continues:   Continue::None,
+            to_delete:   None,
+            sticky_session: None,
+            forwarded: ForwardedHeaders {
+                x_proto: true,
+                x_host: false,
+                x_port: true,
+                x_for: Some(String::from("10.0.0.2")),
+                forwarded: Some(String::from("proto:https;for=10.0.0.2:1234;by:1.2.3.4")),
+            },
+          },
           String::from("localhost:8888"),
         ),
-        Some(179)
+        Some(180)
       )
     );
 }
@@ -672,7 +712,7 @@ fn parse_requests_and_chunks_test() {
     buf.write(&input[..]).unwrap();
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     assert_eq!(buf.start_parsing_position, 160);
     assert_eq!(
@@ -711,7 +751,7 @@ fn parse_requests_and_chunks_partial_test() {
     buf.write(&input[..125]).unwrap();
     println!("parsing\n{}", buf.buffer.data().to_hex(16));
 
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result({}): {:?}", line!(), result);
     assert_eq!(buf.start_parsing_position, 124);
     assert_eq!(
@@ -731,7 +771,7 @@ fn parse_requests_and_chunks_partial_test() {
     buf.write(&input[125..140]).unwrap();
     println!("parsing\n{}", buf.buffer.data().to_hex(16));
 
-    let result = parse_request_until_stop(result.0, result.1, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(result.0, result.1, &mut buf, None, "SOZUBALANCEID");
     println!("result({}): {:?}", line!(), result);
     assert_eq!(buf.start_parsing_position, 153);
     assert_eq!(
@@ -749,7 +789,7 @@ fn parse_requests_and_chunks_partial_test() {
 
     buf.write(&input[153..]).unwrap();
     println!("parsing\n{}", buf.buffer.data().to_hex(16));
-    let result = parse_request_until_stop(result.0, result.1, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(result.0, result.1, &mut buf, None, "SOZUBALANCEID");
     println!("result({}): {:?}", line!(), result);
     assert_eq!(buf.start_parsing_position, 160);
     assert_eq!(
@@ -1076,6 +1116,7 @@ fn parse_response_304() {
             continues:   Continue::None,
             to_delete:   None,
             sticky_session: None,
+            forwarded: ForwardedHeaders::default(),
           },
         ),
         Some(66)
@@ -1107,7 +1148,7 @@ fn hostname_parsing_test() {
 fn hostname_parsing_underscore_test() {
   assert_eq!(
     hostname_and_port(&b"test_example.com"[..]),
-     Err(Err::Error(error_position!(&b"_example.com"[..], ErrorKind::Eof)))
+      Err(Err::Error(error_position!(&b"_example.com"[..], ErrorKind::Eof)))
   );
 }
 
@@ -1170,7 +1211,7 @@ fn parse_connection_upgrade_test() {
     println!("buffer input: {:?}", buf.input_queue);
 
     //let result = parse_request(initial, input);
-    let result = parse_request_until_stop(initial, None, &mut buf, "", "SOZUBALANCEID");
+    let result = parse_request_until_stop(initial, None, &mut buf, None, "SOZUBALANCEID");
     println!("result: {:?}", result);
     println!("input length: {}", input.len());
     println!("buffer input: {:?}", buf.input_queue);
@@ -1178,7 +1219,7 @@ fn parse_connection_upgrade_test() {
     assert_eq!(buf.output_queue, vec!(
       OutputElement::Slice(26), OutputElement::Slice(22), OutputElement::Slice(25),
       OutputElement::Slice(13), OutputElement::Slice(20), OutputElement::Slice(33),
-      OutputElement::Insert(vec!()), OutputElement::Slice(2)));
+      OutputElement::Slice(2)));
     assert_eq!(buf.start_parsing_position, 141);
     assert_eq!(
       result,
@@ -1191,7 +1232,8 @@ fn parse_connection_upgrade_test() {
             upgrade:     Some("WebSocket".to_string()),
             continues:   Continue::None,
             to_delete:   None,
-            sticky_session: None
+            sticky_session: None,
+            forwarded: ForwardedHeaders::default(),
           },
           String::from("localhost:8888"),
         ),

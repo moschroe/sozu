@@ -271,7 +271,7 @@ pub struct FileAppFrontendConfig {
   pub certificate:       Option<String>,
   pub key:               Option<String>,
   pub certificate_chain: Option<String>,
-  pub client_ca_certs:   Option<Vec<String>>
+  pub client_ca_certs:   Option<Vec<String>>,
   #[serde(default)]
   pub position:          RulePosition,
 }
@@ -721,6 +721,10 @@ pub struct FileConfig {
   pub activate_listeners:       Option<bool>,
   #[serde(default)]
   pub front_timeout:            Option<u32>,
+  #[serde(default)]
+  pub back_timeout:             Option<u32>,
+  #[serde(default)]
+  pub connect_timeout:          Option<u32>,
   #[serde(default)]
   pub back_timeout:             Option<u32>,
   #[serde(default)]

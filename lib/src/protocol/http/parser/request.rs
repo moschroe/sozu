@@ -11,6 +11,7 @@ use std::convert::From;
 
 use super::{BufferMove, LengthInformation, RRequestLine, Connection, Chunk, Host, HeaderValue, TransferEncodingValue,
   Method, Version, Continue, Header, message_header, request_line, crlf,};
+use protocol::http::AddedRequestHeader;
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum RequestState {
@@ -94,15 +95,15 @@ impl RequestState {
     }
   }
 
-  pub fn get_uri(&self) -> Option<&str> {
+  pub fn get_uri(&self) -> Option<String> {
     match *self {
       RequestState::HasRequestLine(ref rl, _)         |
       RequestState::HasHost(ref rl, _, _)             |
       RequestState::HasHostAndLength(ref rl, _, _, _) |
       RequestState::Request(ref rl , _, _)            |
       RequestState::RequestWithBody(ref rl, _, _, _)  |
-      RequestState::RequestWithBodyChunks(ref rl, _, _, _) => Some(rl.uri.as_str()),
-      RequestState::Error(ref rl, _, _, _, _)              => rl.as_ref().map(|r| r.uri.as_str()),
+      RequestState::RequestWithBodyChunks(ref rl, _, _, _) => Some(rl.uri.clone()),
+      RequestState::Error(ref rl, _, _, _, _)              => rl.as_ref().map(|r| r.uri.clone()),
       _                                                    => None
     }
   }
@@ -145,7 +146,6 @@ impl RequestState {
       RequestState::RequestWithBodyChunks(_, ref mut conn, _, _) => Some(conn),
       _                                                      => None
     }
-
   }
 
   pub fn should_copy(&self, position: usize) -> Option<usize> {
@@ -241,15 +241,34 @@ pub fn validate_request_header(mut state: RequestState, header: &Header, sticky_
       }
     }
 
-    /*
-    HeaderValue::Forwarded(_)  => RequestState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedFor(_) => RequestState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedProto(_) => RequestState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedPort(_) => RequestState::Error(ErrorState::InvalidHttp),
-    */
     // FIXME: there should be an error for unsupported encoding
     HeaderValue::Encoding(_) => state.into_error(),
-    HeaderValue::Forwarded   => state,
+    HeaderValue::Forwarded(value) => {
+        //FIXME: it should handle duplicate headers
+        state.get_mut_connection().map(|conn| {
+            conn.forwarded.forwarded = String::from_utf8(value.to_vec()).ok();
+        });
+        state
+    },
+    HeaderValue::XForwardedFor(value) => {
+        //FIXME: it should handle duplicate headers
+        state.get_mut_connection().map(|conn| {
+            conn.forwarded.x_for = String::from_utf8(value.to_vec()).ok();
+        });
+        state
+    },
+    HeaderValue::XForwardedPort => {
+        state.get_mut_connection().map(|conn| {
+            conn.forwarded.x_port = true;
+        });
+        state
+    }
+    HeaderValue::XForwardedProto => {
+        state.get_mut_connection().map(|conn| {
+            conn.forwarded.x_proto = true;
+        });
+        state
+    },
     HeaderValue::Other(_,_)  => state,
     //FIXME: for now, we don't look at what is asked in upgrade since the backend is the one deciding
     HeaderValue::Upgrade(s)  => {
@@ -409,7 +428,7 @@ pub fn parse_request(state: RequestState, buf: &[u8], sticky_name: &str) -> (Buf
 }
 
 pub fn parse_request_until_stop(mut current_state: RequestState, mut header_end: Option<usize>,
-  buf: &mut BufferQueue, added_req_header: &str, sticky_name: &str)
+  buf: &mut BufferQueue, added_req_header: Option<&AddedRequestHeader>, sticky_name: &str)
   -> (RequestState, Option<usize>) {
   loop {
     let (mv, new_state) = parse_request(current_state, buf.unparsed_data(), sticky_name);
@@ -425,16 +444,27 @@ pub fn parse_request_until_stop(mut current_state: RequestState, mut header_end:
         buf.consume_parsed_data(sz);
         if header_end.is_none() {
           match current_state {
-            RequestState::Request(_,_,_) |
-            RequestState::RequestWithBodyChunks(_,_,_,Chunk::Initial) => {
+            RequestState::Request(_,ref conn,_) |
+            RequestState::RequestWithBodyChunks(_,ref conn,_,Chunk::Initial) => {
               //println!("FOUND HEADER END (advance):{}", buf.start_parsing_position);
               header_end = Some(buf.start_parsing_position);
-              buf.insert_output(Vec::from(added_req_header.as_bytes()));
+
+              if let Some(added) = added_req_header {
+                  let s = added.added_request_header(
+                      &conn.forwarded);
+                  buf.insert_output(s.into_bytes());
+              }
+
               buf.slice_output(sz);
             },
             RequestState::RequestWithBody(_,ref mut conn,_,content_length) => {
               header_end = Some(buf.start_parsing_position);
-              buf.insert_output(Vec::from(added_req_header.as_bytes()));
+
+              if let Some(added) = added_req_header {
+                  let s = added.added_request_header(
+                      &conn.forwarded);
+                  buf.insert_output(s.into_bytes());
+              }
 
               // If we got "Expects: 100-continue", the body will be sent later
               if conn.continues == Continue::None {
@@ -461,12 +491,24 @@ pub fn parse_request_until_stop(mut current_state: RequestState, mut header_end:
             RequestState::RequestWithBodyChunks(_,_,_,_) => {
               //println!("FOUND HEADER END (delete):{}", buf.start_parsing_position);
               header_end = Some(buf.start_parsing_position);
-              buf.insert_output(Vec::from(added_req_header.as_bytes()));
+
+              if let Some(added) = added_req_header {
+                  let s = added.added_request_header(
+                      &current_state.get_mut_connection().as_ref().unwrap().forwarded);
+                  buf.insert_output(s.into_bytes());
+              }
+
               buf.delete_output(length);
             },
             RequestState::RequestWithBody(_,_,_,content_length) => {
               header_end = Some(buf.start_parsing_position);
-              buf.insert_output(Vec::from(added_req_header.as_bytes()));
+
+              if let Some(added) = added_req_header {
+                  let s = added.added_request_header(
+                      &current_state.get_mut_connection().as_ref().unwrap().forwarded);
+                  buf.insert_output(s.into_bytes());
+              }
+
               buf.delete_output(length);
 
               buf.slice_output(content_length);

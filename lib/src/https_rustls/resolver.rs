@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::HashMap;
 use std::io::BufReader;
-use rustls::{ClientHello};
 use webpki;
 use rustls::{ResolvesServerCert, SignatureScheme, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient, ClientHello};
 use rustls::sign::{CertifiedKey, RSASigningKey};

@@ -1,4 +1,5 @@
 use super::cookies::{RequestCookie, parse_request_cookies};
+use super::AddedRequestHeader;
 use features::FEATURES;
 
 use nom::{
@@ -585,11 +586,16 @@ impl<'a> Header<'a> {
       }
     } else if compare_no_case(self.name, b"upgrade") {
       HeaderValue::Upgrade(self.value)
-    } else if compare_no_case(self.name, b"forwarded")   ||
-        compare_no_case(self.name, b"x-forwarded-for")   ||
-        compare_no_case(self.name, b"x-forwarded-proto") ||
-        compare_no_case(self.name, b"x-forwarded-port") {
-      HeaderValue::Forwarded
+    } else if compare_no_case(self.name, b"forwarded") {
+      HeaderValue::Forwarded(self.value)
+    } else if compare_no_case(self.name, b"x-forwarded-for") {
+      HeaderValue::XForwardedFor(self.value)
+    } else if compare_no_case(self.name, b"x-forwarded-proto") {
+      //FIXME: should parse the header properly
+      HeaderValue::XForwardedProto
+    } else if compare_no_case(self.name, b"x-forwarded-port") {
+      //FIXME: should parse the header properly
+      HeaderValue::XForwardedPort
     } else if compare_no_case(self.name, b"expect") {
       if compare_no_case(self.value, b"100-continue") {
         HeaderValue::ExpectContinue
@@ -641,8 +647,9 @@ impl<'a> Header<'a> {
     } else if compare_no_case(&self.name, b"set-cookie") {
       self.value.starts_with(sticky_name.as_bytes())
     } else {
-      let mut b = (compare_no_case(&self.name, b"connection") && !compare_no_case(&self.value, b"upgrade")) ||
-      compare_no_case(&self.name, b"sozu-id")           ||
+      let b = (compare_no_case(&self.name, b"connection") &&
+                   !compare_no_case(&self.value, b"upgrade")) ||
+                    compare_no_case(&self.name, b"sozu-id")   ||
       {
         let mut res = false;
         if let Some(ref to_delete) = conn.to_delete {
@@ -657,11 +664,16 @@ impl<'a> Header<'a> {
         res
       };
 
-      if !FEATURES.with(|features| features.borrow().get("forwarded-fix").map(|f| f.is_true()).unwrap_or(false)) {
-        b |= compare_no_case(&self.name, b"forwarded")         ||
-             compare_no_case(&self.name, b"x-forwarded-for")   ||
-             compare_no_case(&self.name, b"x-forwarded-proto") ||
-             compare_no_case(&self.name, b"x-forwarded-port");
+      if compare_no_case(&self.name, b"x-forwarded-proto") ||
+          compare_no_case(&self.name, b"x-forwarded-host") ||
+          compare_no_case(&self.name, b"x-forwarded-port") {
+
+        return false;
+      }
+
+      if compare_no_case(&self.name, b"x-forwarded-for") ||
+          compare_no_case(&self.name, b"forwarded") {
+              return true;
       }
 
       b
@@ -756,9 +768,16 @@ impl<'a> Header<'a> {
   }
 }
 
+#[derive(Debug,Clone,Copy,PartialEq)]
 pub enum ForwardedProtocol {
   HTTP,
   HTTPS
+}
+
+impl Default for ForwardedProtocol {
+    fn default() -> Self {
+        ForwardedProtocol::HTTP
+    }
 }
 
 pub enum HeaderValue<'a> {
@@ -770,14 +789,11 @@ pub enum HeaderValue<'a> {
   Upgrade(&'a[u8]),
   Cookie(Vec<RequestCookie<'a>>),
   Other(&'a[u8],&'a[u8]),
-  Forwarded,
   ExpectContinue,
-  /*
-  Forwarded(Vec<&'a[u8]>),
-  XForwardedFor(Vec<&'a[u8]>),
-  XForwardedProto(ForwardedProtocol),
-  XForwardedPort(u16),
-  */
+  Forwarded(&'a[u8]),
+  XForwardedFor(&'a[u8]),
+  XForwardedProto,
+  XForwardedPort,
   Error
 }
 
@@ -804,6 +820,14 @@ pub enum Connection {
 }
 */
 
+#[derive(Debug,Clone,PartialEq,Default)]
+pub struct ForwardedHeaders {
+    pub x_proto: bool,
+    pub x_host: bool,
+    pub x_port: bool,
+    pub x_for: Option<String>,
+    pub forwarded: Option<String>,
+}
 
 #[derive(Debug,Clone,PartialEq)]
 pub struct Connection {
@@ -813,6 +837,7 @@ pub struct Connection {
   pub to_delete:      Option<HashSet<Vec<u8>>>,
   pub continues:      Continue,
   pub sticky_session: Option<String>,
+  pub forwarded:      ForwardedHeaders,
 }
 
 impl Connection {
@@ -824,6 +849,7 @@ impl Connection {
       continues:      Continue::None,
       to_delete:      None,
       sticky_session: None,
+      forwarded:      ForwardedHeaders::default(),
     }
   }
 
@@ -835,6 +861,7 @@ impl Connection {
       continues:      Continue::None,
       to_delete:      None,
       sticky_session: None,
+      forwarded:      ForwardedHeaders::default(),
     }
   }
 
@@ -845,10 +872,12 @@ impl Connection {
       upgrade:        None,
       continues:      Continue::None,
       to_delete:      None,
-      sticky_session: None
+      sticky_session: None,
+      forwarded:      ForwardedHeaders::default(),
     }
   }
 }
+
 
 pub type HeaderEndPosition = Option<usize>;
 
@@ -860,5 +889,5 @@ pub enum BufferMove {
   /// length
   Delete(usize),
   /// Vec of BufferMove operations
-  Multiple(Vec<BufferMove>),
+  Multiple(Vec<BufferMove>)
 }

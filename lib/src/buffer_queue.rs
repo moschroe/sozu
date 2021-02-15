@@ -510,6 +510,7 @@ mod tests {
       output_queue:           vec!()
     };*/
 
+    // the pool will align the buffer to 16 bytes so there are trailing zeroes
     assert_eq!(b.unparsed_data(), &b"ABCDEFGHIJ\0\0\0\0\0\0\0\0\0\0"[..]);
     b.consume_parsed_data(4);
     assert_eq!(b.parsed_position, 4);

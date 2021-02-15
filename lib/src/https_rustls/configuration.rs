@@ -17,8 +17,8 @@ use sozu_command::scm_socket::ScmSocket;
 use sozu_command::proxy::{Cluster,
   ProxyRequestData,HttpFrontend,HttpsListener,ProxyRequest,ProxyResponse,
   ProxyResponseStatus,AddCertificate,RemoveCertificate,ReplaceCertificate,
-  TlsVersion,ProxyResponseData,Query, QueryCertificateType,QueryAnswer, AddClientCa, RemoveClientCa,
-  QueryAnswerCertificate,Route};
+  TlsVersion,ProxyResponseData,Query, QueryCertificateType,QueryAnswer,
+  AddClientCa, RemoveClientCa,QueryAnswerCertificate,Route};
 use sozu_command::logging;
 use sozu_command::ready::Ready;
 

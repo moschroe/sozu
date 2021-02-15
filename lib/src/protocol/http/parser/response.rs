@@ -212,13 +212,10 @@ pub fn validate_response_header(mut state: ResponseState, header: &Header, is_he
     // FIXME: there should be an error for unsupported encoding
     HeaderValue::Encoding(_) => state.into_error(),
     HeaderValue::Host(_)     => state.into_error(),
-    /*
-    HeaderValue::Forwarded(_)  => ResponseState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedFor(_) => ResponseState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedProto(_) => ResponseState::Error(ErrorState::InvalidHttp),
-    HeaderValue::XForwardedPort(_) => ResponseState::Error(ErrorState::InvalidHttp),
-    */
-    HeaderValue::Forwarded   => state,
+    HeaderValue::Forwarded(_)  => state.into_error(),
+    HeaderValue::XForwardedFor(_) => state.into_error(),
+    HeaderValue::XForwardedProto => state.into_error(),
+    HeaderValue::XForwardedPort  => state.into_error(),
     HeaderValue::Other(_,_)  => state,
     HeaderValue::ExpectContinue => {
       // we should not get that one from the server
@@ -351,9 +348,9 @@ pub fn parse_response(state: ResponseState, buf: &[u8], is_head: bool, sticky_na
 }
 
 pub fn parse_response_until_stop(mut current_state: ResponseState, mut header_end: Option<usize>,
-    buf: &mut BufferQueue, is_head: bool, added_res_header: &str,
-    sticky_name: &str, sticky_session: Option<&StickySession>)
-  -> (ResponseState, Option<usize>) {
+  buf: &mut BufferQueue, is_head: bool, added_res_header: &str,
+  sticky_name: &str, sticky_session: Option<&StickySession>)
+-> (ResponseState, Option<usize>) {
   loop {
     //trace!("PARSER\t{}\tpos[{}]: {:?}", request_id, position, current_state);
     let (mv, new_state) = parse_response(current_state, buf.unparsed_data(), is_head, sticky_name);
