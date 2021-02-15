@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::io::BufReader;
 use rustls::{ClientHello};
 use webpki;
-use rustls::{ResolvesServerCert, SignatureScheme, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient};
+use rustls::{ResolvesServerCert, SignatureScheme, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient, ClientHello};
 use rustls::sign::{CertifiedKey, RSASigningKey};
 use rustls::internal::pemfile;
 
@@ -11,6 +11,7 @@ use sozu_command::proxy::{CertificateAndKey, CertificateFingerprint, AddCertific
 use sozu_command::certificate::calculate_fingerprint_from_der;
 
 use router::trie::TrieNode;
+use webpki::DNSNameRef;
 
 struct TlsData {
   pub cert:     CertifiedKey,
@@ -128,39 +129,87 @@ impl ResolvesServerCert for CertificateResolverWrapper {
     let name: &str = server_name.unwrap().into();
 
     trace!("trying to resolve name: {:?} for signature scheme: {:?}", name, sigschemes);
-    if let Ok(ref mut resolver) = self.0.try_lock() {
-      //resolver.domains.print();
-      if let Some(kv) = resolver.domains.domain_lookup(name.as_bytes(), true) {
-         trace!("looking for certificate for {:?} with fingerprint {:?}", name, kv.1);
-         return resolver.certificates.get(&kv.1).as_ref().map(|data| data.cert.clone());
+      if let Ok(ref mut resolver) = self.0.try_lock() {
+        //resolver.domains.print();
+        let name_str: &str = server_name.into();
+        if let Some(kv) = resolver.domains.domain_lookup(name_str.as_bytes(), true) {
+          trace!("looking for certificate for {:?} with fingerprint {:?}", server_name, kv.1);
+          return resolver.certificates.get(&kv.1).as_ref().map(|data| data.cert.clone());
+        }
       }
+      error!("could not look up a certificate for server name '{:?}'", server_name);
+      None
+    } else {
+      error!("cannot look up certificate: no SNI from session");
+      return None;
     }
-
-    error!("could not look up a certificate for server name '{}'", name);
-    None
   }
 }
 
 pub struct DynamicClientCertificateVerifierWrapper(RwLock<DynamicClientCertificateVerifier>);
 
 impl ClientCertVerifier for DynamicClientCertificateVerifierWrapper {
-  fn client_auth_root_subjects(&self) -> DistinguishedNames {
+  fn client_auth_root_subjects(&self, opt_sni: Option<&webpki::DNSName>) -> Option<DistinguishedNames> {
     let access_read = self.0.read().expect("lock poisoned, unrecoverable program state");
-    access_read.inner.client_auth_root_subjects()
+    if access_read.passthrough {
+        return None;
+    }
+    // access_read.inner.client_auth_root_subjects()
+    if let Some(sni) = opt_sni {
+      // eprintln!("client_auth_root_subjects({:?})", sni);
+      let snistr: &str = sni.as_ref().into();
+      if let Some((key, fp)) = access_read.domains.domain_lookup(snistr.as_bytes(), true) {
+        let verifier = access_read.inners.get(fp).expect("inconsistent state, inners should contain domain fingerprint!");
+        let res = verifier.client_auth_root_subjects(opt_sni);
+        // eprintln!("client_auth_root_subjects() -> {:?}", res);
+        res
+      } else {
+        error!("unable to find root for domain {:?}", snistr);
+        None
+      }
+    } else {
+      warn!("no SNI, unable to look up client ca");
+      None
+    }
   }
 
-  fn verify_client_cert(&self, presented_certs: &[Certificate]) -> Result<ClientCertVerified, TLSError> {
+  // fn verify_client_cert(&self, presented_certs: &[Certificate]) -> Result<ClientCertVerified, TLSError>
+  fn verify_client_cert(&self,
+                        presented_certs: &[Certificate],
+                        opt_sni: Option<&webpki::DNSName>) -> Result<ClientCertVerified, TLSError>
+  {
     let access_read = self.0.read().map_err(|err_rwlock| {
       error!("unable to acquire RwLock on inner DynamicClientCertificateVerifier in verify_client_cert(), returning Err");
       TLSError::General("internal error in client cert verifier".into())
     })?;
-    access_read.inner.verify_client_cert(presented_certs)
+    if access_read.passthrough {
+      return Ok(ClientCertVerified::assertion());
+    }
+    // access_read.inner.verify_client_cert(presented_certs)
+    if let Some(sni) = opt_sni {
+      // eprintln!("verify_client_cert({:?})", sni);
+      let snistr: &str = sni.as_ref().into();
+      if let Some((key, fp)) = access_read.domains.domain_lookup(snistr.as_bytes(), true) {
+        let verifier = access_read.inners.get(fp).expect("inconsistent state, inners should contain domain fingerprint!");
+        // eprintln!("presented_certs: {:?}", presented_certs);
+        let res = verifier.verify_client_cert(presented_certs, opt_sni);
+        // eprintln!("verify_client_cert() -> {:?}", res.is_ok());
+        // res
+        unimplemented!();
+      } else {
+        error!("unable to find root for domain {:?}", snistr);
+        Err(TLSError::General(format!("unable to find root for domain {:?}", snistr)))
+      }
+    } else {
+      warn!("no SNI, unable to look up client ca");
+      Err(TLSError::General(format!("no SNI, unable to look up client ca")))
+    }
   }
 }
 
 impl DynamicClientCertificateVerifierWrapper {
-  pub fn in_arc() -> Arc<Self> {
-    Arc::new(DynamicClientCertificateVerifierWrapper(RwLock::new(DynamicClientCertificateVerifier::new())))
+  pub fn in_arc(passthrough: bool) -> Arc<Self> {
+    Arc::new(DynamicClientCertificateVerifierWrapper(RwLock::new(DynamicClientCertificateVerifier::new(passthrough))))
   }
 
   pub fn add_client_ca(&self, add: AddClientCa) -> Result<CertFingerprint, String> {
@@ -174,22 +223,32 @@ impl DynamicClientCertificateVerifierWrapper {
   }
 }
 
+type ARCVerifier=Arc<(dyn ClientCertVerifier + 'static)>;
+
 pub struct DynamicClientCertificateVerifier {
+  domains:  TrieNode<CertFingerprint>,
   roots: HashMap<CertFingerprint, rustls::Certificate>,
-  inner: Arc<(dyn ClientCertVerifier + 'static)>,
+  // inner: Arc<(dyn ClientCertVerifier + 'static)>,
+  inners: HashMap<CertFingerprint, ARCVerifier>,
+  /// Signals NOP mode where no checks are performed but the verifier has already been passed to
+  /// rustls.
+  passthrough: bool,
 }
 
 impl DynamicClientCertificateVerifier {
-  fn new() -> Self {
+  fn new(passthrough: bool) -> Self {
     let roots = RootCertStore::empty();
     DynamicClientCertificateVerifier {
+      domains: TrieNode::root(),
       roots: HashMap::new(),
-      inner: AllowAnyAuthenticatedClient::new(roots),
+      // inner: AllowAnyAuthenticatedClient::new(roots),
+      inners: Default::default(),
+      passthrough
     }
   }
 
   fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertFingerprint, String> {
-    trace!("adding client ca");
+    debug!("adding client ca: {:?}", add);
     let mut rdr_cert = BufReader::new(add.certificate.as_bytes());
     let mut certs = match pemfile::certs(&mut rdr_cert) {
       Ok(cert) => cert,
@@ -207,25 +266,51 @@ impl DynamicClientCertificateVerifier {
       return Err(format!("unable to parse exactly one cert from provided client CA data, got {}", certs.len() + 1));
     }
     std::mem::drop(certs);
-    let mut new_roots = RootCertStore::empty();
-    if let Err(err) = new_roots.add(&cert) {
-      return Err(format!("unable to add new client CA to RootCertStore: {}", err));
-    };
-    self.add_all_roots(&mut new_roots)?;
     let fp = CertFingerprint(calculate_fingerprint_from_der(&cert.0));
+
+    let mut new_cert_store = RootCertStore::empty();
+    new_cert_store.add(&cert);
+
     self.roots.insert(fp.clone(), cert);
-    // make new verifier
-    self.inner = AllowAnyAuthenticatedClient::new(new_roots);
+    for dom in add.names {
+      self.domains.domain_insert(dom.into_bytes(), fp.clone());
+    }
+
+    // eprintln!("sadfasf: {:?}", self.domains);
+    // eprintln!("sadfasf: {:?}", self.roots);
+    use std::collections::hash_map::Entry;
+    let verifier_new=AllowAnyAuthenticatedClient::new(new_cert_store);
+    match self.inners.entry(fp.clone()) {
+      Entry::Occupied(mut enoc)=>{
+        enoc.insert(verifier_new);
+      }
+      Entry::Vacant(envac)=>{
+        envac.insert(verifier_new);
+      }
+    }
+
+    // let mut new_roots = RootCertStore::empty();
+    // if let Err(err) = new_roots.add(&cert) {
+    //   return Err(format!("unable to add new client CA to RootCertStore: {}", err));
+    // };
+    // self.add_all_roots(&mut new_roots)?;
+    // self.roots.insert(fp.clone(), cert);
+    // // make new verifier
+    // self.inner = AllowAnyAuthenticatedClient::new(new_roots)
+
+    // enable checks
+    self.passthrough = false;
     Ok(fp)
   }
 
   fn remove_client_ca(&mut self, remove: RemoveClientCa) -> Result<(), String> {
-    trace!("removing client ca");
-    self.roots.remove(&remove.fingerprint).ok_or_else(|| format!("no client ca cert with given fingerprint found to remove"))?;
-    let mut new_roots = RootCertStore::empty();
-    self.add_all_roots(&mut new_roots)?;
-    self.inner = AllowAnyAuthenticatedClient::new(new_roots);
-    Ok(())
+    unimplemented!();
+    // trace!("removing client ca");
+    // self.roots.remove(&remove.fingerprint).ok_or_else(|| format!("no client ca cert with given fingerprint found to remove"))?;
+    // let mut new_roots = RootCertStore::empty();
+    // self.add_all_roots(&mut new_roots)?;
+    // self.inner = AllowAnyAuthenticatedClient::new(new_roots);
+    // Ok(())
   }
 
   fn add_all_roots(&mut self, new_roots: &mut RootCertStore) -> Result<(), String> {
@@ -239,12 +324,16 @@ impl DynamicClientCertificateVerifier {
 }
 
 impl ClientCertVerifier for DynamicClientCertificateVerifier {
-  fn client_auth_root_subjects(&self) -> DistinguishedNames {
-    self.inner.client_auth_root_subjects()
+  fn client_auth_root_subjects(&self, sni: Option<&webpki::DNSName>) -> Option<DistinguishedNames> {
+    unimplemented!();
+    // self.inner.client_auth_root_subjects(sni)
   }
 
-  fn verify_client_cert(&self, presented_certs: &[Certificate]) -> Result<ClientCertVerified, TLSError> {
-    self.inner.verify_client_cert(presented_certs)
+  fn verify_client_cert(&self,
+                        presented_certs: &[Certificate],
+                        sni: Option<&webpki::DNSName>) -> Result<ClientCertVerified, TLSError> {
+    unimplemented!();
+    // self.inner.verify_client_cert(presented_certs,sni)
   }
 }
 

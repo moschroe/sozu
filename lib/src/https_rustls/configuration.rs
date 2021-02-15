@@ -64,14 +64,14 @@ impl Listener {
   pub fn new(config: HttpsListener, token: Token) -> Listener {
 
     // panic!("trace creation of Listener...");
-    eprintln!("Listener::new(config): {:#?}",config);
-    let client_verifier=DynamicClientCertificateVerifierWrapper::in_arc();
+    eprintln!("Listener::new(config): {:#?}", config);
+    let client_verifier = DynamicClientCertificateVerifierWrapper::in_arc(config.verify_tlsclients);
     // let mut server_config = ServerConfig::new(NoClientAuth::new());
     let mut server_config = ServerConfig::new(client_verifier.clone());
     server_config.versions = config.versions.iter().map(|version| {
       match version {
-        TlsVersion::SSLv2   => ProtocolVersion::SSLv2,
-        TlsVersion::SSLv3   => ProtocolVersion::SSLv3,
+        TlsVersion::SSLv2 => ProtocolVersion::SSLv2,
+        TlsVersion::SSLv3 => ProtocolVersion::SSLv3,
         TlsVersion::TLSv1_0 => ProtocolVersion::TLSv1_0,
         TlsVersion::TLSv1_1 => ProtocolVersion::TLSv1_1,
         TlsVersion::TLSv1_2 => ProtocolVersion::TLSv1_2,
@@ -545,7 +545,7 @@ impl ProxyConfiguration<Session> for Proxy {
   }
 
   fn notify(&mut self, event_loop: &mut Poll, message: ProxyRequest) -> ProxyResponse {
-    //info!("{} notified", message);
+    info!("{} notified", message);
     match message.order {
       ProxyRequestData::AddCluster(cluster) => {
         debug!("{} add cluster {:?}", message.id, cluster);

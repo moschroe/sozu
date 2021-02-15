@@ -57,7 +57,7 @@ version = "^0.8.0"
 features = ["v4"]
 
 [features]
-default  = []
+default  = [ "logs-trace", "logs-debug" ]
 splice   = []
 unstable = []
 logs-debug = []
