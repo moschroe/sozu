@@ -174,7 +174,7 @@ impl ConfigState {
       ProxyRequestData::AddClientCA(ref cca) => {
         use std::collections::hash_map::Entry;
         let fingerprint = match calculate_fingerprint(cca.certificate.as_bytes()) {
-          Some(fp) => CertFingerprint(fp),
+          Some(fp) => CertificateFingerprint(fp),
           None => {
             error!("cannot obtain the client CA's fingerprint");
             return false;
@@ -499,12 +499,12 @@ impl ConfigState {
     let removed_certificates = my_certificates.difference(&their_certificates);
     let added_certificates   = their_certificates.difference(&my_certificates);
 
-    let my_client_cas: HashSet<(SocketAddr, &CertFingerprint, &(String, Vec<String>))> = {
+    let my_client_cas: HashSet<(SocketAddr, &CertificateFingerprint, &(String, Vec<String>))> = {
       HashSet::from_iter(self.client_cas.iter().flat_map(|(addr, ccas)| {
         ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
       }))
     };
-    let their_client_cas: HashSet<(SocketAddr, &CertFingerprint, &(String, Vec<String>))> = {
+    let their_client_cas: HashSet<(SocketAddr, &CertificateFingerprint, &(String, Vec<String>))> = {
       HashSet::from_iter(other.client_cas.iter().flat_map(|(addr, ccas)| {
         ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
       }))

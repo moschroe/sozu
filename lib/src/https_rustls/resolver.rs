@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::collections::HashMap;
 use std::io::BufReader;
 use webpki;
-use rustls::{ResolvesServerCert, SignatureScheme, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient, ClientHello};
+use rustls::{ResolvesServerCert, RootCertStore, ClientCertVerifier, ClientCertVerified, DistinguishedNames, TLSError, Certificate, AllowAnyAuthenticatedClient, ClientHello};
 use rustls::sign::{CertifiedKey, RSASigningKey};
 use rustls::internal::pemfile;
 
@@ -10,7 +10,6 @@ use sozu_command::proxy::{CertificateAndKey, CertificateFingerprint, AddCertific
 use sozu_command::certificate::calculate_fingerprint_from_der;
 
 use router::trie::TrieNode;
-use webpki::DNSNameRef;
 
 struct TlsData {
   pub cert:     CertifiedKey,
@@ -115,9 +114,9 @@ impl CertificateResolverWrapper {
 
 impl ResolvesServerCert for CertificateResolverWrapper {
   fn resolve(
-        &self,
-        client_hello: ClientHello,
-    ) -> Option<CertifiedKey> {
+    &self,
+    client_hello: ClientHello,
+  ) -> Option<CertifiedKey> {
     let server_name = client_hello.server_name();
     let sigschemes = client_hello.sigschemes();
 
@@ -128,20 +127,16 @@ impl ResolvesServerCert for CertificateResolverWrapper {
     let name: &str = server_name.unwrap().into();
 
     trace!("trying to resolve name: {:?} for signature scheme: {:?}", name, sigschemes);
-      if let Ok(ref mut resolver) = self.0.try_lock() {
-        //resolver.domains.print();
-        let name_str: &str = server_name.into();
-        if let Some(kv) = resolver.domains.domain_lookup(name_str.as_bytes(), true) {
-          trace!("looking for certificate for {:?} with fingerprint {:?}", server_name, kv.1);
-          return resolver.certificates.get(&kv.1).as_ref().map(|data| data.cert.clone());
-        }
+    if let Ok(ref mut resolver) = self.0.try_lock() {
+      //resolver.domains.print();
+      if let Some(kv) = resolver.domains.domain_lookup(name.as_bytes(), true) {
+        trace!("looking for certificate for {:?} with fingerprint {:?}", name, kv.1);
+        return resolver.certificates.get(&kv.1).as_ref().map(|data| data.cert.clone());
       }
-      error!("could not look up a certificate for server name '{:?}'", server_name);
-      None
-    } else {
-      error!("cannot look up certificate: no SNI from session");
-      return None;
     }
+
+    error!("could not look up a certificate for server name '{}'", name);
+    None
   }
 }
 
@@ -211,7 +206,7 @@ impl DynamicClientCertificateVerifierWrapper {
     Arc::new(DynamicClientCertificateVerifierWrapper(RwLock::new(DynamicClientCertificateVerifier::new(passthrough))))
   }
 
-  pub fn add_client_ca(&self, add: AddClientCa) -> Result<CertFingerprint, String> {
+  pub fn add_client_ca(&self, add: AddClientCa) -> Result<CertificateFingerprint, String> {
     let mut access_write = self.0.write().expect("lock poisoned, unrecoverable program state");
     access_write.add_client_ca(add)
   }
@@ -225,10 +220,10 @@ impl DynamicClientCertificateVerifierWrapper {
 type ARCVerifier=Arc<(dyn ClientCertVerifier + 'static)>;
 
 pub struct DynamicClientCertificateVerifier {
-  domains:  TrieNode<CertFingerprint>,
-  roots: HashMap<CertFingerprint, rustls::Certificate>,
+  domains:  TrieNode<CertificateFingerprint>,
+  roots: HashMap<CertificateFingerprint, rustls::Certificate>,
   // inner: Arc<(dyn ClientCertVerifier + 'static)>,
-  inners: HashMap<CertFingerprint, ARCVerifier>,
+  inners: HashMap<CertificateFingerprint, ARCVerifier>,
   /// Signals NOP mode where no checks are performed but the verifier has already been passed to
   /// rustls.
   passthrough: bool,
@@ -246,7 +241,7 @@ impl DynamicClientCertificateVerifier {
     }
   }
 
-  fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertFingerprint, String> {
+  fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertificateFingerprint, String> {
     debug!("adding client ca: {:?}", add);
     let mut rdr_cert = BufReader::new(add.certificate.as_bytes());
     let mut certs = match pemfile::certs(&mut rdr_cert) {
@@ -265,7 +260,7 @@ impl DynamicClientCertificateVerifier {
       return Err(format!("unable to parse exactly one cert from provided client CA data, got {}", certs.len() + 1));
     }
     std::mem::drop(certs);
-    let fp = CertFingerprint(calculate_fingerprint_from_der(&cert.0));
+    let fp = CertificateFingerprint(calculate_fingerprint_from_der(&cert.0));
 
     let mut new_cert_store = RootCertStore::empty();
     new_cert_store.add(&cert);

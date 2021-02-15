@@ -9,12 +9,12 @@ use std::collections::HashMap;
 use slab::Slab;
 use std::net::SocketAddr;
 use std::str::from_utf8_unchecked;
-use rustls::{ServerConfig, ServerSession, NoClientAuth, ProtocolVersion,
+use rustls::{ServerConfig, ServerSession, ProtocolVersion,
   ALL_CIPHERSUITES};
 use time::Duration;
 
 use sozu_command::scm_socket::ScmSocket;
-use sozu_command::proxy::{Cluster,
+use sozu_command::proxy::{Cluster, CertificateFingerprint,
   ProxyRequestData,HttpFrontend,HttpsListener,ProxyRequest,ProxyResponse,
   ProxyResponseStatus,AddCertificate,RemoveCertificate,ReplaceCertificate,
   TlsVersion,ProxyResponseData,Query, QueryCertificateType,QueryAnswer,
@@ -34,7 +34,7 @@ use protocol::StickySession;
 use protocol::http::DefaultAnswerStatus;
 use util::UnwrapLog;
 
-use super::resolver::CertificateResolverWrapper;
+use super::resolver::{CertificateResolverWrapper, DynamicClientCertificateVerifierWrapper};
 use super::session::Session;
 
 #[derive(Debug,Clone,PartialEq,Eq)]
@@ -181,7 +181,7 @@ impl Listener {
     (*self.resolver).add_certificate(add);
   }
 
-  pub fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertFingerprint, String> {
+  pub fn add_client_ca(&mut self, add: AddClientCa) -> Result<CertificateFingerprint, String> {
     self.client_verifier.add_client_ca(add)
   }
 
@@ -700,8 +700,6 @@ impl ProxyConfiguration<Session> for Proxy {
 }
 
 use server::HttpsProvider;
-use std::any::Any;
-use https_rustls::resolver::DynamicClientCertificateVerifierWrapper;
 
 pub fn start(config: HttpsListener, channel: ProxyChannel, max_buffers: usize, buffer_size: usize) {
   use server::{self,ProxySessionCast};

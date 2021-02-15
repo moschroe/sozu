@@ -342,7 +342,7 @@ pub struct AddClientCa {
 }
 #[derive(Debug,Clone,PartialEq,Eq,Hash, Serialize, Deserialize)]
 pub struct RemoveClientCa {
-    pub address:     SocketAddr,
+    pub front:       SocketAddr,
     pub fingerprint: CertificateFingerprint,
 }
 
