@@ -316,7 +316,7 @@ impl FileAppFrontendConfig {
       error!("cannot load certificate chain at path '{}': {:?}", path, e);
       e
     }).ok())
-      .map(split_certificate_chain);
+                              .map(split_certificate_chain);
 
     let path = match (self.path.as_ref(), self.path_type.as_ref()) {
       (None, _) => PathRule::Prefix("".to_string()),
@@ -326,13 +326,19 @@ impl FileAppFrontendConfig {
       (Some(s), None) => PathRule::Prefix(s.clone()),
     };
 
+    let cca_opt = self.client_ca_certs.as_ref()
+                      .map(|vec_paths| vec_paths.iter().map(|path_cca| {
+                        Config::load_file(&path_cca)
+                      }).collect::<Result<Vec<_>, std::io::Error>>()).and_then(|res| res.ok());
+
+
     Ok(HttpFrontendConfig {
       address:           self.address,
       hostname:          self.hostname.clone().unwrap(),
       certificate:       certificate_opt,
       key:               key_opt,
       certificate_chain: chain_opt,
-      client_ca_certs:   self.client_ca_certs.clone()
+      client_ca_certs:   cca_opt,
       position:          self.position,
       path,
       method:            self.method.clone(),
@@ -538,10 +544,11 @@ impl HttpFrontendConfig {
       }));
 
       if let Some(vec_ca_certs) = &self.client_ca_certs {
-        for ca_cert in vec_ca_certs{
+        for ca_cert in vec_ca_certs {
           v.push(ProxyRequestData::AddClientCA(AddClientCa{
             front: self.address,
-            certificate: ca_cert.clone()
+            certificate: ca_cert.clone(),
+            names: vec!(self.hostname.clone())
           }));
         }
       }

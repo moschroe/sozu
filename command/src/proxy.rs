@@ -336,6 +336,9 @@ pub struct AddCertificate {
 pub struct AddClientCa {
     pub front:       SocketAddr,
     pub certificate: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Vec::is_empty")]
+    pub names: Vec<String>,
 }
 #[derive(Debug,Clone,PartialEq,Eq,Hash, Serialize, Deserialize)]
 pub struct RemoveClientCa {

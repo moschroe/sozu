@@ -44,7 +44,7 @@ pub struct ConfigState {
   pub tcp_fronts:      HashMap<ClusterId, Vec<TcpFrontend>>,
   // certificate and names
   pub certificates:    HashMap<SocketAddr, HashMap<CertificateFingerprint, (CertificateAndKey, Vec<String>)>>,
-  pub client_cas:      HashMap<SocketAddr, HashMap<CertificateFingerprint, String>>,
+  pub client_cas:      HashMap<SocketAddr, HashMap<CertificateFingerprint, (String, Vec<String>)>>,
   //ip, port
   pub http_addresses:  Vec<SocketAddr>,
   pub https_addresses: Vec<SocketAddr>,
@@ -183,7 +183,7 @@ impl ConfigState {
         match self.client_cas.entry(cca.front) {
           Entry::Vacant(ev) => {
             let mut map=HashMap::with_capacity(1);
-            map.insert(fingerprint, cca.certificate.clone());
+            map.insert(fingerprint, (cca.certificate.clone(),cca.names.clone()));
             ev.insert(map);
             true
           }
@@ -191,7 +191,7 @@ impl ConfigState {
             let map_certs = eo.get_mut();
             if !map_certs.contains_key(&fingerprint)
             {
-              map_certs.insert(fingerprint, cca.certificate.clone());
+              map_certs.insert(fingerprint, (cca.certificate.clone(),cca.names.clone()));
               true
             } else {
               false
@@ -340,10 +340,11 @@ impl ConfigState {
     }
 
     for (front, ccas) in &self.client_cas {
-      for (_fp, cca) in ccas {
+      for (_fp, (cca,names)) in ccas {
         v.push(ProxyRequestData::AddClientCA(AddClientCa {
           front: *front,
           certificate: cca.clone(),
+          names: names.clone()
         }));
       }
     }
@@ -498,12 +499,12 @@ impl ConfigState {
     let removed_certificates = my_certificates.difference(&their_certificates);
     let added_certificates   = their_certificates.difference(&my_certificates);
 
-    let my_client_cas: HashSet<(SocketAddr, &CertFingerprint, &String)> = {
+    let my_client_cas: HashSet<(SocketAddr, &CertFingerprint, &(String, Vec<String>))> = {
       HashSet::from_iter(self.client_cas.iter().flat_map(|(addr, ccas)| {
         ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
       }))
     };
-    let their_client_cas: HashSet<(SocketAddr, &CertFingerprint, &String)> = {
+    let their_client_cas: HashSet<(SocketAddr, &CertFingerprint, &(String, Vec<String>))> = {
       HashSet::from_iter(other.client_cas.iter().flat_map(|(addr, ccas)| {
         ccas.iter().zip(repeat(*addr)).map(|((fp, cacert), addr)| (addr, fp, cacert))
       }))
@@ -702,10 +703,11 @@ impl ConfigState {
       }));
     }
 
-    for (front, _fp, cert) in added_client_cas {
+    for (front, _fp, (cert,names)) in added_client_cas {
       v.push(ProxyRequestData::AddClientCA(AddClientCa {
         front: *front,
         certificate: (*cert).clone(),
+        names: names.clone()
       }));
     }
 
