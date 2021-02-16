@@ -23,6 +23,15 @@ pub mod answers;
 use self::parser::{parse_request_until_stop, parse_response_until_stop,
   RequestState, ResponseState, Chunk, Continue, RRequestLine, RStatusLine,
   Method, compare_no_case};
+use https_rustls::cert_info::ClientCertSubject;
+
+pub const HEADER_AUTH_SUBJECT_C: &str = "Sozu-Auth-C";
+pub const HEADER_AUTH_SUBJECT_ST: &str = "Sozu-Auth-ST";
+pub const HEADER_AUTH_SUBJECT_L: &str = "Sozu-Auth-L";
+pub const HEADER_AUTH_SUBJECT_O: &str = "Sozu-Auth-O";
+pub const HEADER_AUTH_SUBJECT_OU: &str = "Sozu-Auth-OU";
+pub const HEADER_AUTH_SUBJECT_CN: &str = "Sozu-Auth-CN";
+pub const HEADER_AUTH_SUBJECT_EMAIL: &str = "Sozu-Auth-Email";
 
 #[derive(Clone)]
 pub struct StickySession {
@@ -106,7 +115,7 @@ impl<Front:SocketHandler> Http<Front> {
     public_address: SocketAddr, session_address: Option<SocketAddr>, sticky_name: String,
     protocol: Protocol, answers: Rc<RefCell<answers::HttpAnswers>>,
     front_timeout: TimeoutContainer,
-    frontend_timeout_duration: Duration, backend_timeout_duration: Duration) -> Http<Front> {
+    frontend_timeout_duration: Duration, backend_timeout_duration: Duration, opt_client_cert: Option<ClientCertSubject>) -> Http<Front> {
 
     let mut session = Http {
       frontend:           sock,
@@ -143,7 +152,9 @@ impl<Front:SocketHandler> Http<Front> {
       answers,
       pool,
     };
-    session.added_req_header = Some(session.added_request_header(public_address, session_address));
+    let mut added_request_header = session.added_request_header(public_address, session_address);
+    added_request_header.opt_client_cert=opt_client_cert;
+    session.added_req_header = Some(added_request_header);
     session.added_res_header = session.added_response_header();
 
     session
@@ -232,6 +243,7 @@ impl<Front:SocketHandler> Http<Front> {
           public_address: self.public_address,
           peer_address: client_address.or_else(|| self.front_socket().peer_addr().ok()),
           protocol: self.protocol,
+          opt_client_cert: None
       }
   }
 
@@ -1587,6 +1599,7 @@ pub struct AddedRequestHeader {
     pub peer_address: Option<SocketAddr>,
     pub protocol: Protocol,
     pub closing: bool,
+    pub opt_client_cert: Option<ClientCertSubject>,
 }
 
 impl AddedRequestHeader {
@@ -1657,6 +1670,31 @@ impl AddedRequestHeader {
                            proto, peer_ip, peer_port, front_ip)
                 },
             };
+        }
+
+        if let Some(client_cert) = &self.opt_client_cert {
+          // TODO: proper encoding for headers
+          if let Some(country) = &client_cert.opt_country {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_C, country);
+          }
+          if let Some(state) = &client_cert.opt_state {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_ST, state);
+          }
+          if let Some(loc) = &client_cert.opt_locality {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_L, loc);
+          }
+          if let Some(org) = &client_cert.opt_org {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_O, org);
+          }
+          if let Some(unit) = &client_cert.opt_org_unit {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_OU, unit);
+          }
+          if let Some(cn) = &client_cert.opt_common_name {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_CN, cn);
+          }
+          if let Some(mail) = &client_cert.opt_email {
+            write!(&mut s, "{}: {}\r\n",  HEADER_AUTH_SUBJECT_EMAIL, mail);
+          }
         }
 
         write!(&mut s, "Sozu-Id: {}\r\n{}", self.request_id, closing_header);

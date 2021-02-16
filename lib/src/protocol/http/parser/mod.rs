@@ -31,6 +31,7 @@ mod tests;
 
 pub use self::request::*;
 pub use self::response::*;
+use protocol::http::{HEADER_AUTH_SUBJECT_C, HEADER_AUTH_SUBJECT_ST, HEADER_AUTH_SUBJECT_O, HEADER_AUTH_SUBJECT_L, HEADER_AUTH_SUBJECT_OU, HEADER_AUTH_SUBJECT_CN, HEADER_AUTH_SUBJECT_EMAIL};
 
 pub fn compare_no_case(left: &[u8], right: &[u8]) -> bool {
   if left.len() != right.len() {
@@ -646,6 +647,19 @@ impl<'a> Header<'a> {
       }
     } else if compare_no_case(&self.name, b"set-cookie") {
       self.value.starts_with(sticky_name.as_bytes())
+    } else if
+        // remove these headers as they are reserved for transporting identity info in TLS client
+        // authentication. They must not be manipulated/defined by a client so any upstream servers
+        // have the guarantee that their presence signals a successfully authenticated client and
+        // the information contained was verified.
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_C.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_ST.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_L.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_O.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_OU.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_CN.as_bytes()) ||
+        compare_no_case(&self.name, HEADER_AUTH_SUBJECT_EMAIL.as_bytes()) {
+      true
     } else {
       let b = (compare_no_case(&self.name, b"connection") &&
                    !compare_no_case(&self.value, b"upgrade")) ||
