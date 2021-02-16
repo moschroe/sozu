@@ -24,6 +24,8 @@ use buffer_queue::BufferQueue;
 use server::push_event;
 use timer::TimeoutContainer;
 use sozu_command::ready::Ready;
+use https_rustls::cert_info;
+use https_rustls::cert_info::ClientCertSubject;
 
 pub enum State {
   Expect(ExpectProxyProtocol<TcpStream>, ServerSession),
@@ -164,6 +166,22 @@ impl Session {
         return false;
       }
 
+      let opt_client_cert: Option<ClientCertSubject>;
+
+      if let Some(peer_cert) = handshake.session.get_peer_certificates() {
+        // at this point, there _is_ a client cert _and_ it was found to be valid by the verifier
+        // (which might be in passthrough mode!)
+        opt_client_cert = match peer_cert.get(0).map(cert_info::extract_subject).transpose() {
+          Ok(opt_subj) => opt_subj,
+          Err(err) => {
+            error!("unable to prepare subject info of Front TLS Session: {}", err);
+            return false;
+          }
+        };
+      } else {
+        opt_client_cert = None
+      }
+
       let mut front_buf = front_buf.unwrap();
 
       handshake.session.get_protocol_version().map(|version| {
@@ -179,11 +197,13 @@ impl Session {
       };
 
       let readiness = handshake.readiness.clone();
+
       let mut http = Http::new(front_stream, self.frontend_token, handshake.request_id,
                                self.pool.clone(), self.public_address, self.peer_address,
                                self.sticky_name.clone(), Protocol::HTTPS, self.answers.clone(),
                                self.front_timeout.take(),
-                               self.frontend_timeout_duration, self.backend_timeout_duration);
+                               self.frontend_timeout_duration, self.backend_timeout_duration, opt_client_cert);
+
 
       let res = http.frontend.session.read(front_buf.space());
       match res {

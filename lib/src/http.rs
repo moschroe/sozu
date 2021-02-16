@@ -84,7 +84,7 @@ impl Session {
       let timeout = TimeoutContainer::new(request_timeout_duration, token);
       Some(State::Http(Http::new(sock, token, request_id, pool.clone(), public_address,
         session_address, sticky_name.clone(), Protocol::HTTP, answers.clone(), timeout,
-        frontend_timeout_duration, backend_timeout_duration)))
+        frontend_timeout_duration, backend_timeout_duration, None)))
     };
 
     let metrics = SessionMetrics::new(Some(wait_time));
@@ -175,7 +175,7 @@ impl Session {
           self.pool.clone(), public_address, Some(client_address),
           self.sticky_name.clone(), Protocol::HTTP, self.answers.clone(),
           self.front_timeout.take(), self.frontend_timeout_duration,
-          self.backend_timeout_duration);
+          self.backend_timeout_duration, None);
         http.front_readiness.event = readiness.event;
 
         gauge_add!("protocol.proxy.expect", -1);
