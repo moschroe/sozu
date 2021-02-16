@@ -187,9 +187,9 @@ impl ClientCertVerifier for DynamicClientCertificateVerifierWrapper {
         let verifier = access_read.inners.get(fp).expect("inconsistent state, inners should contain domain fingerprint!");
         // eprintln!("presented_certs: {:?}", presented_certs);
         let res = verifier.verify_client_cert(presented_certs, opt_sni);
-        // eprintln!("verify_client_cert() -> {:?}", res.is_ok());
-        // res
-        unimplemented!();
+        eprintln!("verify_client_cert() -> {:?}", res.is_ok());
+        res
+        // unimplemented!();
       } else {
         error!("unable to find root for domain {:?}", snistr);
         Err(TLSError::General(format!("unable to find root for domain {:?}", snistr)))
